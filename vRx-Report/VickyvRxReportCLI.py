@@ -307,21 +307,26 @@ def getAllIncidentEventVulnerabilities(fr0m,siz3,incidenttype,minDate,maxDate):
     jresponse = incidents.getIncidentEventsbyType(apikey,urldashboard,fr0m,siz3,incidenttype,minDate,maxDate) 
 
     if jresponse is None:
-        print("jresponse é None, tentando novamente em 10 segundos...")
+        print("jresponse is None, retrying in 10 seconds...")
         time.sleep(10)
         getAllIncidentEventVulnerabilities(fr0m,siz3,incidenttype,minDate,maxDate)
     
-    elif len(jresponse['serverResponseObject']) > 0:
+    # Check if the expected key exists and if it contains data
+    elif 'serverResponseObject' in jresponse and len(jresponse['serverResponseObject']) > 0:
         strEventsVuln,minDate = incidents.parseIncidentEventsbyType(jresponse)
         minDate = str(minDate)
         dictState.update({'minDateIncidentEventVulnerabilities': int(minDate)})
         state.setState(dictState)
         writeReport(dictState['reporIncidentEventVulnerabilities'],strEventsVuln)
-        print("foi->" + str(len(jresponse['serverResponseObject'])))
+        print("Processing ->" + str(len(jresponse['serverResponseObject'])))
         getAllIncidentEventVulnerabilities(fr0m,siz3,incidenttype,minDate,maxDate)
         
     else:
-        print("No event")
+        # This block now handles both the end of pagination and unexpected API responses
+        if 'serverResponseObject' not in jresponse:
+            print(f"Warning: Unexpected API response received. Halting incident report. Response: {jresponse}")
+        else:
+            print("No more incident events to process.")
     
 def getAllEndpointsProductsVersions(fr0m,siz3,count,pbar):
     if fr0m == 0:
