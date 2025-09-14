@@ -30,7 +30,7 @@ services:
       context: .
       dockerfile: Dockerfile.easypanel
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/vrx_dashboard
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/vrx_dashboard
       API_HOST: 0.0.0.0
       API_PORT: 8000
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
