@@ -24,9 +24,9 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-K67lkk7580*}@postgres:5432/vrx_dashboard
       API_HOST: 0.0.0.0
       API_PORT: 8000
-      FRONTEND_URL: ${FRONTEND_URL:-https://adguard-vrxdashboardaapp.al6ndp.easypanel.host}
+      FRONTEND_URL: ${FRONTEND_URL:-https://vrx-dashboard.al6ndp.easypanel.host}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://adguard-vrxdashboardaapp.al6ndp.easypanel.host}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://vrx-dashboard.al6ndp.easypanel.host}
     depends_on:
       postgres:
         condition: service_healthy

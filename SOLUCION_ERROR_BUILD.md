@@ -52,9 +52,9 @@ Asegúrate de que estos directorios estén presentes en el repositorio:
 4. **Variables de entorno**:
 ```bash
 POSTGRES_PASSWORD=K67lkk7580*
-FRONTEND_URL=https://adguard-vrxdashboardaapp.al6ndp.easypanel.host/
+FRONTEND_URL=https://vrx-dashboard.al6ndp.easypanel.host
 LOG_LEVEL=INFO
-CORS_ORIGINS=https://adguard-vrxdashboardaapp.al6ndp.easypanel.host/
+CORS_ORIGINS=https://vrx-dashboard.al6ndp.easypanel.host
 ```
 
 ### **Opción 2: Docker Compose (ALTERNATIVA)**

@@ -2,13 +2,13 @@
 # Copia estas variables en la configuración de Easypanel
 
 # Base de datos
-POSTGRES_PASSWORD=tu_password_seguro_aqui
+POSTGRES_PASSWORD=K67lkk7580*
 
 # Aplicación
-FRONTEND_URL=https://tu-dominio.easypanel.host
+FRONTEND_URL=https://vrx-dashboard.al6ndp.easypanel.host
 LOG_LEVEL=INFO
-CORS_ORIGINS=https://tu-dominio.easypanel.host
+CORS_ORIGINS=https://vrx-dashboard.al6ndp.easypanel.host
 
 # Opcional: Para desarrollo
 # LOG_LEVEL=DEBUG
-# CORS_ORIGINS=http://localhost:3000,https://tu-dominio.easypanel.host
+# CORS_ORIGINS=http://localhost:8000,https://vrx-dashboard.al6ndp.easypanel.host
