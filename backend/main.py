@@ -699,11 +699,18 @@ async def process_csv_files():
         logger.error(f"Error procesando archivos CSV: {e}")
         raise
 
-async def bulk_load_csv(file_path: str, table_name: str, columns: list, column_mapping: dict = None):
+async def bulk_load_csv(file_path: str, table_name: str, columns: list, column_mapping: dict = None, timestamp_cols: list = None):
     """Carga datos desde un archivo CSV a una tabla usando el comando COPY de PostgreSQL."""
     try:
         df = pd.read_csv(file_path, usecols=columns)
         
+        # Convertir columnas de timestamp (Unix ms) a formato de fecha y hora
+        if timestamp_cols:
+            for col in timestamp_cols:
+                if col in df.columns:
+                    # errors='coerce' convierte valores no válidos en NaT (Not a Time), que se convierte en NULL
+                    df[col] = pd.to_datetime(df[col], unit='ms', errors='coerce')
+
         db_columns = list(columns) # Copia de la lista de columnas
         if column_mapping:
             db_columns = [column_mapping.get(c, c) for c in columns]
@@ -741,6 +748,7 @@ async def load_endpoints_csv(file_path: str):
     columns = [
         'ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt'
     ]
+    timestamp_cols = ['endpointUpdatedAt']
     # Mapeo de nombres de columna del CSV a la Base de Datos
     column_mapping = {
         'ID': 'endpoint_id',
@@ -750,7 +758,7 @@ async def load_endpoints_csv(file_path: str):
         'VERSION': 'version',
         'endpointUpdatedAt': 'endpoint_updated_at'
     }
-    await bulk_load_csv(file_path, 'endpoints', columns, column_mapping)
+    await bulk_load_csv(file_path, 'endpoints', columns, column_mapping, timestamp_cols)
 
 async def load_vulnerabilities_csv(file_path: str):
     """Cargar datos de vulnerabilidades desde CSV"""
@@ -760,7 +768,23 @@ async def load_vulnerabilities_csv(file_path: str):
         'patchReleaseDate', 'createAt', 'updateAt', 'link', 'vulnerabilitySummary',
         'V3BaseScore', 'V3ExploitabilityLevel'
     ]
-    await bulk_load_csv(file_path, 'vulnerabilities', columns)
+    timestamp_cols = ['patchReleaseDate', 'createAt', 'updateAt']
+    column_mapping = {
+        'group': 'group_name',
+        'productName': 'product_name',
+        'productRawEntryName': 'product_raw_entry_name',
+        'sensitivityLevelName': 'sensitivity_level_name',
+        'vulnerabilityid': 'vulnerability_id',
+        'patchid': 'patch_id',
+        'patchName': 'patch_name',
+        'patchReleaseDate': 'patch_release_date',
+        'createAt': 'create_at',
+        'updateAt': 'update_at',
+        'vulnerabilitySummary': 'vulnerability_summary',
+        'V3BaseScore': 'v3_base_score',
+        'V3ExploitabilityLevel': 'v3_exploitability_level'
+    }
+    await bulk_load_csv(file_path, 'vulnerabilities', columns, column_mapping, timestamp_cols)
 
 async def load_patches_csv(file_path: str):
     """Cargar datos de patches desde CSV"""
@@ -768,7 +792,16 @@ async def load_patches_csv(file_path: str):
         'Asset', 'SO', 'PatchName', 'SeverityLevel', 
         'SeverityName', 'Description', 'PatchID'
     ]
-    await bulk_load_csv(file_path, 'endpoint_patches', columns)
+    column_mapping = {
+        'Asset': 'asset',
+        'SO': 'operating_system',
+        'PatchName': 'patch_name',
+        'SeverityLevel': 'severity_level',
+        'SeverityName': 'severity_name',
+        'Description': 'description',
+        'PatchID': 'patch_id'
+    }
+    await bulk_load_csv(file_path, 'endpoint_patches', columns, column_mapping)
 
 async def load_tasks_csv(file_path: str):
     """Cargar datos de tareas desde CSV"""
@@ -777,7 +810,23 @@ async def load_tasks_csv(file_path: str):
         'PublisherName', 'PathOrProduct', 'PathOrProductDesc',
         'ActionStatus', 'MessageStatus', 'Username', 'CreateAt', 'UpdateAt'
     ]
-    await bulk_load_csv(file_path, 'endpoint_event_tasks', columns)
+    timestamp_cols = ['CreateAt', 'UpdateAt']
+    column_mapping = {
+        'Taskid': 'task_id',
+        'AutomationId': 'automation_id',
+        'AutomationName': 'automation_name',
+        'Asset': 'asset',
+        'TaskType': 'task_type',
+        'PublisherName': 'publisher_name',
+        'PathOrProduct': 'path_or_product',
+        'PathOrProductDesc': 'path_or_product_desc',
+        'ActionStatus': 'action_status',
+        'MessageStatus': 'message_status',
+        'Username': 'username',
+        'CreateAt': 'create_at',
+        'UpdateAt': 'update_at'
+    }
+    await bulk_load_csv(file_path, 'endpoint_event_tasks', columns, column_mapping, timestamp_cols)
 
 if __name__ == "__main__":
     import uvicorn
