@@ -78,12 +78,13 @@ def getAllEndpoitsTasks(fr0m,siz3,maxDate,minDate):
         head = "Taskid,AutomationId,AutomationName,Asset,TaskType,PublisherName,PathOrProduct,PathOrProductDesc,ActionStatus,MessageStatus,Username,CreateAt,UpdateAt\n"
         writeReport(dictState['reportNameEventsTasks'],head)"""
     
+    strTasks, lastdate = "", 0  # Inicializar variables antes del try
     control_rate (50)
 
     try:
-        strTasks,lastdate = tasks.getTasksEndopintsEvents(apikey,urldashboard,fr0m,siz3,maxDate,minDate)
+        strTasks, lastdate = tasks.getTasksEndopintsEvents(apikey,urldashboard,fr0m,siz3,maxDate,minDate)
     except Exception as e:
-        strTasks,lastdate = "", 0
+        # Las variables ya tienen un valor seguro, solo registramos el error
         print (f"An exception occurred: {e}")
 
     
