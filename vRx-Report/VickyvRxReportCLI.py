@@ -70,6 +70,25 @@ urldashboard = args.dashboard
 
 #Get the Stats and Reports Names
 dictState = state.getState()
+if dictState is None:
+    print("state.json not found. Creating default state.")
+    dictState = {
+        "lastEndpointsEventTask": 0,
+        "minDateIncidentEventVulnerabilities": 0,
+        "reportNameEventsTasks": "reports/EndpointsEventTask.csv",
+        "reportAssets": "reports/Endpoints.csv",
+        "reportAssetsGroup": "reports/EndpointsGroup.csv",
+        "reportEndpointGroups": "reports/EndpointsGroup.csv",
+        "reportAssetsAttrributes": "reports/EndpointAttributes.csv",
+        "reportAssetsExploitabilityRiskFactors": "reports/EndpointExploitabilityRiskFactors.csv",
+        "reportAssetsScoresImpactRiskFactors": "reports/EndpointScoresImpactRiskFactors.csv",
+        "reporIncidentEventVulnerabilities": "reports/EndpointIncidentesVulnerabilities.csv",
+        "reportNameProducts": "reports/Products.csv",
+        "reportNameVulnerabilities": "reports/Vulnerabilities.csv",
+        "reportCountEndpointPatchs": "reports/EndpointCountPatchs.csv",
+        "reportNameEndpointPatchs": "reports/EndpointPatchs.csv"
+    }
+
 
 def getAllEndpoitsTasks(fr0m,siz3,maxDate,minDate):
     print("minDate->"+str(minDate))
@@ -613,14 +632,14 @@ def create_or_update_file(file_path, header):
 def main():
     args.dashboard    
     if args.allreports:
-        delete_file('reports\\MitigationTime.csv')
-        delete_file('reports\\EndpointIncidentesVulnerabilitiesND.csv')
-        delete_file('reports\\VulnerabilitiesND.csv')
-        delete_file('reports\\EndpointCountPatchs.csv')
-        delete_file('reports\\EndpointPatchs.csv')
-        delete_file('reports\\Vulnerabilities.csv')
-        delete_file('reports\\EndpointsGroup.csv')
-        delete_file('reports\\Endpoints.csv')
+        delete_file('reports/MitigationTime.csv')
+        delete_file('reports/EndpointIncidentesVulnerabilitiesND.csv')
+        delete_file('reports/VulnerabilitiesND.csv')
+        delete_file('reports/EndpointCountPatchs.csv')
+        delete_file('reports/EndpointPatchs.csv')
+        delete_file('reports/Vulnerabilities.csv')
+        delete_file('reports/EndpointsGroup.csv')
+        delete_file('reports/Endpoints.csv')
         
         ReportEndpoints()
         ReportGroupsSearchs()
