@@ -482,13 +482,23 @@ def getAllEndpointsVulnerabilities(fr0m,siz3,minDate,maxDate,endpointName,endpoi
     try:
         control_rate()
         jresponse = vuln.getEndpointVulnerabilities(apikey, urldashboard, fr0m, siz3, minDate, maxDate, endpointName, endpointHash)
-        if jresponse['serverResponseCount'] > 0:
+        
+        # Check for valid response and if there is data to process
+        if jresponse and 'serverResponseCount' in jresponse and jresponse['serverResponseCount'] > 0:
             control_rate()  # Control rate before making another query
-            strVulnerabilities, maxDate = vuln.parseEndpointVulnerabilities(jresponse, endpointGroups)
+            # The maxDate is not used for pagination here, so we can ignore it.
+            strVulnerabilities, _ = vuln.parseEndpointVulnerabilities(jresponse, endpointGroups)
             writeReport(dictState['reportNameVulnerabilities'], strVulnerabilities)
 
+            # If the number of results equals the page size, there might be more pages.
             if jresponse['serverResponseCount'] >= siz3:
-                getAllEndpointsVulnerabilities(fr0m, siz3, minDate, maxDate, endpointName, endpointHash, endpointGroups)
+                # Recursive call to get the next page of results.
+                # BUG FIX: Increment 'fr0m' for pagination to avoid infinite recursion.
+                getAllEndpointsVulnerabilities(fr0m + siz3, siz3, minDate, maxDate, endpointName, endpointHash, endpointGroups)
+        elif jresponse and 'serverResponseCount' not in jresponse:
+            # Handle unexpected API response structure
+            print(f"Warning: Unexpected API response for endpoint {endpointName}. Response: {jresponse}")
+
     except Exception as e:
         # Handle errors/log here
         print (e)
@@ -567,7 +577,6 @@ def ReportEndpointPatchs():
 
     fr0m = 0
     siz3 = 500
-    totalPatchs = 0
 
     strcountendpointpatchs = "Asset,TotalPactchs\n"
     writeReport(dictState['reportCountEndpointPatchs'],strcountendpointpatchs)
@@ -583,6 +592,8 @@ def ReportEndpointPatchs():
             endpointSO = df['SO'][ind]  
             control_rate()          
             endpointGroups = SearchGroupsbyEndpoint(endpointName,dfg)
+            # BUG FIX: Reset totalPatchs for each endpoint to count them correctly.
+            totalPatchs = 0
             control_rate()
             getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalPatchs)
 
