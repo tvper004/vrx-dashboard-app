@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copiar archivos de Python existentes
-COPY vRx-Report-Unicon/ ./vRx-Report-Unicon/
+COPY vRx-Report/ ./vRx-Report/
 
 # Instalar dependencias de Python
 COPY backend/requirements.txt ./
@@ -34,7 +34,7 @@ COPY backend/ ./
 COPY --from=frontend-builder /app/frontend/build ./static
 
 # Crear directorio para reports
-RUN mkdir -p /app/vRx-Report-Unicon/reports
+RUN mkdir -p /app/vRx-Report/reports
 
 # Configurar variables de entorno
 ENV PYTHONPATH=/app

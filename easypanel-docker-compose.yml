@@ -40,8 +40,8 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./vRx-Report-Unicon:/app/vRx-Report-Unicon
-      - reports_data:/app/vRx-Report-Unicon/reports
+      - ./vRx-Report:/app/vRx-Report
+      - reports_data:/app/vRx-Report/reports
     networks:
       - vrx-network
     restart: unless-stopped

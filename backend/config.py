@@ -26,8 +26,8 @@ class Config:
     MAX_CONCURRENT_EXTRACTIONS = int(os.getenv("MAX_CONCURRENT_EXTRACTIONS", "1"))
     
     # Configuración de archivos
-    REPORTS_DIR = os.getenv("REPORTS_DIR", "/app/vRx-Report-Unicon/reports")
-    SCRIPT_DIR = os.getenv("SCRIPT_DIR", "/app/vRx-Report-Unicon")
+    REPORTS_DIR = os.getenv("REPORTS_DIR", "/app/vRx-Report/reports")
+    SCRIPT_DIR = os.getenv("SCRIPT_DIR", "/app/vRx-Report")
     
     # Configuración de CORS
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")

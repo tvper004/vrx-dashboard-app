@@ -382,7 +382,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             conn.commit()
         
         # Ejecutar el script de extracción
-        script_path = "/app/vRx-Report-Unicon/VickyvRxReportCLI.py"
+        script_path = "/app/vRx-Report/VickyvRxReportCLI.py"
         
         cmd = [
             "python", script_path,
@@ -398,7 +398,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             cmd,
             capture_output=True,
             text=True,
-            cwd="/app/vRx-Report-Unicon"
+            cwd="/app/vRx-Report"
         )
         
         if process.returncode == 0:
@@ -462,7 +462,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
 async def process_csv_files():
     """Procesar archivos CSV y cargar datos en base de datos"""
     try:
-        reports_dir = "/app/vRx-Report-Unicon/reports"
+        reports_dir = "/app/vRx-Report/reports"
         
         # Procesar endpoints
         endpoints_file = os.path.join(reports_dir, "Endpoints.csv")

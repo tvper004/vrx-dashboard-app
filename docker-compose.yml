@@ -32,7 +32,7 @@ services:
     depends_on:
       - postgres
     volumes:
-      - ./vRx-Report-Unicon:/app/vRx-Report-Unicon
+      - ./vRx-Report:/app/vRx-Report
       - ./backend:/app
     networks:
       - vrx-network

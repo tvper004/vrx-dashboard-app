@@ -41,7 +41,7 @@
     "volumes": [
       {
         "name": "reports",
-        "path": "/app/vRx-Report-Unicon/reports"
+        "path": "/app/vRx-Report/reports"
       }
     ],
     "healthcheck": {

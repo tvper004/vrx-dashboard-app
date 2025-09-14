@@ -36,7 +36,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - reports_data:/app/vRx-Report-Unicon/reports
+      - reports_data:/app/vRx-Report/reports
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
