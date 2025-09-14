@@ -118,16 +118,14 @@ function App() {
     }
   };
 
-  const exportMenu = (
-    <Menu onClick={(e) => handleExport(e.key)}>
-      <Menu.Item key="general">Reporte General</Menu.Item>
-      <Menu.Item key="overview">Exportar Resumen</Menu.Item>
-      <Menu.Item key="status">Exportar Estado de Endpoints</Menu.Item>
-      <Menu.Item key="top_apps">Exportar Top Aplicaciones Vulnerables</Menu.Item>
-      <Menu.Item key="top_remediated">Exportar Top Aplicaciones Remediadas</Menu.Item>
-      <Menu.Item key="comparison">Exportar Comparativo de Remediación</Menu.Item>
-    </Menu>
-  );
+  const exportMenuItems = [
+    { key: 'general', label: 'Reporte General' },
+    { key: 'overview', label: 'Exportar Resumen' },
+    { key: 'status', label: 'Exportar Estado de Endpoints' },
+    { key: 'top_apps', label: 'Exportar Top Aplicaciones Vulnerables' },
+    { key: 'top_remediated', label: 'Exportar Top Aplicaciones Remediadas' },
+    { key: 'comparison', label: 'Exportar Comparativo de Remediación' },
+  ];
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -144,7 +142,7 @@ function App() {
           >
             {extractionStatus?.status === 'running' ? 'Extrayendo...' : 'Extraer Datos'}
           </Button>
-          <Dropdown overlay={exportMenu}>
+          <Dropdown menu={{ items: exportMenuItems, onClick: (e) => handleExport(e.key) }}>
             <Button>
               <FilePdfOutlined /> Exportar <DownOutlined />
             </Button>
