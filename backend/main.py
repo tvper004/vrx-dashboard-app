@@ -19,6 +19,7 @@ import asyncio
 from contextlib import asynccontextmanager 
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import io
 import json
 
 # Configuración de logging
@@ -247,6 +248,108 @@ async def get_dashboard_overview():
         logger.error(f"Error getting dashboard overview: {e}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo datos: {str(e)}")
 
+@app.get("/dashboard/groups")
+async def get_groups():
+    """Obtener una lista de todos los grupos de endpoints únicos."""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT DISTINCT group_name FROM vulnerabilities WHERE group_name IS NOT NULL ORDER BY group_name")).fetchall()
+            groups = [row.group_name for row in result]
+            return groups
+    except Exception as e:
+        logger.error(f"Error getting groups: {e}")
+        raise HTTPException(status_code=500, detail="Error obteniendo grupos")
+
+@app.get("/dashboard/endpoint-status")
+async def get_endpoint_status(groups: Optional[str] = None):
+    """Obtener datos sobre el estado de los endpoints."""
+    try:
+        with engine.connect() as conn:
+            group_list = groups.split(',') if groups else []
+            
+            # Gráfico de Status
+            status_query = "SELECT status, sub_status, COUNT(*) as count FROM endpoints"
+            params = {}
+            if group_list:
+                status_query += " WHERE hostname IN (SELECT DISTINCT asset FROM vulnerabilities WHERE group_name = ANY(:groups))"
+                params["groups"] = group_list
+            status_query += " GROUP BY status, sub_status"
+            status_result = conn.execute(text(status_query), params).fetchall()
+
+            # Tabla de Endpoints
+            table_query = """
+                SELECT 
+                    e.hostname, e.status, e.sub_status,
+                    COUNT(CASE WHEN v.sensitivity_level_name = 'Critical' THEN 1 END) as critical,
+                    COUNT(CASE WHEN v.sensitivity_level_name = 'High' THEN 1 END) as high,
+                    COUNT(CASE WHEN v.sensitivity_level_name = 'Low' THEN 1 END) as low,
+                    COUNT(CASE WHEN v.sensitivity_level_name NOT IN ('Critical', 'High', 'Low') OR v.sensitivity_level_name IS NULL THEN 1 END) as na
+                FROM endpoints e
+                LEFT JOIN vulnerabilities v ON e.hostname = v.asset
+            """
+            if group_list:
+                table_query += " WHERE e.hostname IN (SELECT DISTINCT asset FROM vulnerabilities WHERE group_name = ANY(:groups))"
+            
+            table_query += " GROUP BY e.hostname, e.status, e.sub_status ORDER BY e.hostname"
+            table_result = conn.execute(text(table_query), params).fetchall()
+
+            return {
+                "status_chart": [{"name": f"{row.status or 'N/A'} ({row.sub_status or 'N/A'})", "value": row.count} for row in status_result],
+                "endpoint_table": [dict(row._mapping) for row in table_result]
+            }
+    except Exception as e:
+        logger.error(f"Error getting endpoint status: {e}")
+        raise HTTPException(status_code=500, detail="Error obteniendo estado de endpoints")
+
+@app.get("/dashboard/top-apps")
+async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
+    """Obtener top 15 aplicaciones por CVEs (remediados o no)."""
+    try:
+        with engine.connect() as conn:
+            group_list = groups.split(',') if groups else []
+            
+            base_query = """
+                SELECT 
+                    v.product_name,
+                    COUNT(v.id) as total_vulnerabilities,
+                    COUNT(DISTINCT v.asset) as affected_endpoints,
+                    COUNT(CASE WHEN v.sensitivity_level_name = 'Critical' THEN 1 END) as critical,
+                    COUNT(CASE WHEN v.sensitivity_level_name = 'High' THEN 1 END) as high,
+                    COUNT(CASE WHEN v.sensitivity_level_name = 'Low' THEN 1 END) as low,
+                    COUNT(CASE WHEN v.sensitivity_level_name NOT IN ('Critical', 'High', 'Low') OR v.sensitivity_level_name IS NULL THEN 1 END) as na
+                FROM vulnerabilities v
+            """
+            
+            where_clauses = []
+            params = {}
+
+            if remediated:
+                # Asumimos que una tarea de 'Patch Install' exitosa remedia la vulnerabilidad
+                base_query += " JOIN endpoint_event_tasks t ON v.patch_id = t.path_or_product AND v.asset = t.asset"
+                where_clauses.append("t.task_type = 'Patch Install' AND t.action_status = 'Succeeded'")
+
+            if group_list:
+                where_clauses.append("v.group_name = ANY(:groups)")
+                params["groups"] = group_list
+
+            if where_clauses:
+                base_query += " WHERE " + " AND ".join(where_clauses)
+
+            base_query += " GROUP BY v.product_name ORDER BY total_vulnerabilities DESC LIMIT 15"
+
+            result = conn.execute(text(base_query), params).fetchall()
+
+            chart_data = [{"name": row.product_name, "value": row.total_vulnerabilities} for row in result]
+            table_data = [dict(row._mapping) for row in result]
+
+            return {
+                "chart_data": chart_data,
+                "table_data": table_data
+            }
+    except Exception as e:
+        logger.error(f"Error getting top apps: {e}")
+        raise HTTPException(status_code=500, detail="Error obteniendo top de aplicaciones")
+
 @app.get("/dashboard/vulnerabilities")
 async def get_vulnerabilities_data(
     limit: int = 100,
@@ -379,6 +482,33 @@ async def get_tasks_data(
         logger.error(f"Error getting tasks data: {e}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo tareas: {str(e)}")
 
+@app.post("/database/clear")
+async def clear_database():
+    """
+    Limpia todas las tablas de datos de la base de datos.
+    Esta es una operación destructiva y debe usarse con precaución.
+    """
+    tables_to_truncate = [
+        "endpoints",
+        "vulnerabilities",
+        "endpoint_patches",
+        "endpoint_event_tasks",
+        "extraction_logs",
+        "extraction_config"
+    ]
+    try:
+        with engine.connect() as conn:
+            for table in tables_to_truncate:
+                # Usamos CASCADE para manejar dependencias de claves foráneas si las hubiera
+                conn.execute(text(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;"))
+                logger.info(f"Tabla '{table}' truncada exitosamente.")
+            conn.commit()
+        
+        return {"message": "Base de datos limpiada exitosamente."}
+    except Exception as e:
+        logger.error(f"Error limpiando la base de datos: {e}")
+        raise HTTPException(status_code=500, detail=f"Error limpiando la base de datos: {str(e)}")
+
 # Función para ejecutar la extracción de datos
 async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type: str):
     """Ejecutar extracción de datos usando el script Python existente"""
@@ -504,160 +634,75 @@ async def process_csv_files():
         logger.error(f"Error procesando archivos CSV: {e}")
         raise
 
+async def bulk_load_csv(file_path: str, table_name: str, columns: list):
+    """Carga datos desde un archivo CSV a una tabla usando el comando COPY de PostgreSQL."""
+    try:
+        df = pd.read_csv(file_path, usecols=columns)
+        df = df.reindex(columns=columns) # Asegurar el orden de las columnas
+
+        # Limpiar datos: reemplazar NaN por None (NULL en SQL) y manejar saltos de línea
+        df = df.replace({pd.NA: None, pd.NaT: None})
+        for col in df.select_dtypes(include=['object']).columns:
+            df[col] = df[col].str.replace('\n', ' ', regex=False).str.replace('\r', ' ', regex=False)
+
+        with engine.connect() as conn:
+            raw_conn = conn.connection
+            with raw_conn.cursor() as cursor:
+                # Vaciar la tabla antes de cargar nuevos datos
+                cursor.execute(f"TRUNCATE TABLE {table_name} RESTART IDENTITY;")
+                
+                # Preparar CSV en memoria
+                output = io.StringIO()
+                df.to_csv(output, sep='\t', header=False, index=False, na_rep='\\N')
+                output.seek(0)
+                
+                # Ejecutar COPY
+                cursor.copy_expert(
+                    f"COPY {table_name} ({','.join(columns)}) FROM STDIN WITH (FORMAT csv, DELIMITER E'\\t', NULL '\\N')",
+                    output
+                )
+            conn.commit()
+        logger.info(f"Cargados {len(df)} registros en la tabla '{table_name}' exitosamente.")
+    except Exception as e:
+        logger.error(f"Error en la carga masiva para la tabla {table_name}: {e}")
+        raise
+
 async def load_endpoints_csv(file_path: str):
     """Cargar datos de endpoints desde CSV"""
-    try:
-        df = pd.read_csv(file_path)
-        
-        with engine.connect() as conn:
-            # Limpiar tabla existente
-            conn.execute(text("DELETE FROM endpoints"))
-            
-            # Insertar nuevos datos
-            for _, row in df.iterrows():
-                conn.execute(text("""
-                    INSERT INTO endpoints (endpoint_id, hostname, hash, operating_system, version, endpoint_updated_at)
-                    VALUES (:endpoint_id, :hostname, :hash, :operating_system, :version, :endpoint_updated_at)
-                """), {
-                    "endpoint_id": int(row['ID']),
-                    "hostname": row['HOSTNAME'],
-                    "hash": row['HASH'],
-                    "operating_system": row['SO'],
-                    "version": row['VERSION'],
-                    "endpoint_updated_at": datetime.fromtimestamp(int(row['endpointUpdatedAt']) / 1000) if pd.notna(row['endpointUpdatedAt']) else None
-                })
-            
-            conn.commit()
-            logger.info(f"Cargados {len(df)} endpoints")
-            
-    except Exception as e:
-        logger.error(f"Error cargando endpoints: {e}")
-        raise
+    columns = [
+        'ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 
+        'status', 'sub_status', 'endpointUpdatedAt'
+    ]
+    # Renombrar columnas para coincidir con la tabla
+    # Esta parte se manejará en la función bulk_load_csv
+    await bulk_load_csv(file_path, 'endpoints', columns)
 
 async def load_vulnerabilities_csv(file_path: str):
     """Cargar datos de vulnerabilidades desde CSV"""
-    try:
-        df = pd.read_csv(file_path)
-        
-        with engine.connect() as conn:
-            # Limpiar tabla existente
-            conn.execute(text("DELETE FROM vulnerabilities"))
-            
-            # Insertar nuevos datos
-            for _, row in df.iterrows():
-                conn.execute(text("""
-                    INSERT INTO vulnerabilities (
-                        asset, asset_hash, group_name, product_name, product_raw_entry_name,
-                        sensitivity_level_name, cve, vulnerability_id, patch_id, patch_name,
-                        patch_release_date, create_at, update_at, link, vulnerability_summary,
-                        v3_base_score, v3_exploitability_level
-                    ) VALUES (
-                        :asset, :asset_hash, :group_name, :product_name, :product_raw_entry_name,
-                        :sensitivity_level_name, :cve, :vulnerability_id, :patch_id, :patch_name,
-                        :patch_release_date, :create_at, :update_at, :link, :vulnerability_summary,
-                        :v3_base_score, :v3_exploitability_level
-                    )
-                """), {
-                    "asset": row['asset'],
-                    "asset_hash": row['assethash'],
-                    "group_name": row['group'],
-                    "product_name": row['productName'],
-                    "product_raw_entry_name": row['productRawEntryName'],
-                    "sensitivity_level_name": row['sensitivityLevelName'],
-                    "cve": row['cve'],
-                    "vulnerability_id": int(row['vulnerabilityid']) if pd.notna(row['vulnerabilityid']) else None,
-                    "patch_id": row['patchid'],
-                    "patch_name": row['patchName'],
-                    "patch_release_date": datetime.fromtimestamp(int(row['patchReleaseDate']) / 1000) if pd.notna(row['patchReleaseDate']) and row['patchReleaseDate'] != 'n\\a' else None,
-                    "create_at": datetime.fromtimestamp(int(row['createAt']) / 1000) if pd.notna(row['createAt']) else None,
-                    "update_at": datetime.fromtimestamp(int(row['updateAt']) / 1000) if pd.notna(row['updateAt']) else None,
-                    "link": row['link'],
-                    "vulnerability_summary": row['vulnerabilitySummary'],
-                    "v3_base_score": float(row['V3BaseScore']) if pd.notna(row['V3BaseScore']) else None,
-                    "v3_exploitability_level": float(row['V3ExploitabilityLevel']) if pd.notna(row['V3ExploitabilityLevel']) else None
-                })
-            
-            conn.commit()
-            logger.info(f"Cargadas {len(df)} vulnerabilidades")
-            
-    except Exception as e:
-        logger.error(f"Error cargando vulnerabilidades: {e}")
-        raise
+    columns = [
+        'asset', 'assethash', 'group', 'productName', 'productRawEntryName',
+        'sensitivityLevelName', 'cve', 'vulnerabilityid', 'patchid', 'patchName',
+        'patchReleaseDate', 'createAt', 'updateAt', 'link', 'vulnerabilitySummary',
+        'V3BaseScore', 'V3ExploitabilityLevel'
+    ]
+    await bulk_load_csv(file_path, 'vulnerabilities', columns)
 
 async def load_patches_csv(file_path: str):
     """Cargar datos de patches desde CSV"""
-    try:
-        df = pd.read_csv(file_path)
-        
-        with engine.connect() as conn:
-            # Limpiar tabla existente
-            conn.execute(text("DELETE FROM endpoint_patches"))
-            
-            # Insertar nuevos datos
-            for _, row in df.iterrows():
-                conn.execute(text("""
-                    INSERT INTO endpoint_patches (asset, operating_system, patch_name, severity_level, severity_name, description, patch_id)
-                    VALUES (:asset, :operating_system, :patch_name, :severity_level, :severity_name, :description, :patch_id)
-                """), {
-                    "asset": row['Asset'],
-                    "operating_system": row['SO'],
-                    "patch_name": row['PatchName'],
-                    "severity_level": row['SeverityLevel'],
-                    "severity_name": row['SeverityName'],
-                    "description": row['Description'],
-                    "patch_id": row['PatchID']
-                })
-            
-            conn.commit()
-            logger.info(f"Cargados {len(df)} patches")
-            
-    except Exception as e:
-        logger.error(f"Error cargando patches: {e}")
-        raise
+    columns = [
+        'Asset', 'SO', 'PatchName', 'SeverityLevel', 
+        'SeverityName', 'Description', 'PatchID'
+    ]
+    await bulk_load_csv(file_path, 'endpoint_patches', columns)
 
 async def load_tasks_csv(file_path: str):
     """Cargar datos de tareas desde CSV"""
-    try:
-        df = pd.read_csv(file_path)
-        
-        with engine.connect() as conn:
-            # Limpiar tabla existente
-            conn.execute(text("DELETE FROM endpoint_event_tasks"))
-            
-            # Insertar nuevos datos
-            for _, row in df.iterrows():
-                conn.execute(text("""
-                    INSERT INTO endpoint_event_tasks (
-                        task_id, automation_id, automation_name, asset, task_type,
-                        publisher_name, path_or_product, path_or_product_desc,
-                        action_status, message_status, username, create_at, update_at
-                    ) VALUES (
-                        :task_id, :automation_id, :automation_name, :asset, :task_type,
-                        :publisher_name, :path_or_product, :path_or_product_desc,
-                        :action_status, :message_status, :username, :create_at, :update_at
-                    )
-                """), {
-                    "task_id": int(row['Taskid']),
-                    "automation_id": int(row['AutomationId']) if pd.notna(row['AutomationId']) else None,
-                    "automation_name": row['AutomationName'],
-                    "asset": row['Asset'],
-                    "task_type": row['TaskType'],
-                    "publisher_name": row['PublisherName'],
-                    "path_or_product": row['PathOrProduct'],
-                    "path_or_product_desc": row['PathOrProductDesc'],
-                    "action_status": row['ActionStatus'],
-                    "message_status": row['MessageStatus'],
-                    "username": row['Username'],
-                    "create_at": datetime.fromtimestamp(int(row['CreateAt']) / 1000) if pd.notna(row['CreateAt']) else None,
-                    "update_at": datetime.fromtimestamp(int(row['UpdateAt']) / 1000) if pd.notna(row['UpdateAt']) else None
-                })
-            
-            conn.commit()
-            logger.info(f"Cargadas {len(df)} tareas")
-            
-    except Exception as e:
-        logger.error(f"Error cargando tareas: {e}")
-        raise
+    columns = [
+        'Taskid', 'AutomationId', 'AutomationName', 'Asset', 'TaskType',
+        'PublisherName', 'PathOrProduct', 'PathOrProductDesc',
+        'ActionStatus', 'MessageStatus', 'Username', 'CreateAt', 'UpdateAt'
+    ]
+    await bulk_load_csv(file_path, 'endpoint_event_tasks', columns)
 
 if __name__ == "__main__":
     import uvicorn
