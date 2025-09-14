@@ -1,23 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Card, Row, Col, Statistic, Button, Modal, Form, Input, message, Spin, Alert } from 'antd';
+import { Layout, Card, Row, Col, Statistic, Button, Modal, Form, Input, message, Spin, Tabs, Dropdown, Menu } from 'antd';
 import { 
   DashboardOutlined, 
   SecurityScanOutlined, 
   DesktopOutlined, 
   ToolOutlined,
   SyncOutlined,
-  ExclamationCircleOutlined,
   CheckCircleOutlined,
-  ClockCircleOutlined
+  BarChartOutlined,
+  FilePdfOutlined,
+  DownOutlined,
+  BugOutlined,
+  UnorderedListOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
-import OverviewChart from './components/OverviewChart';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import OverviewTab from './tabs/OverviewTab';
+import EndpointStatusTab from './tabs/EndpointStatusTab';
+import TopAppsTab from './tabs/TopAppsTab';
+import RemediationComparisonTab from './tabs/RemediationComparisonTab';
+// Importamos las tablas de datos detallados
 import VulnerabilitiesTable from './components/VulnerabilitiesTable';
 import EndpointsTable from './components/EndpointsTable';
 import TasksTable from './components/TasksTable';
 import './App.css';
 
-const { Header, Content, Sider } = Layout;
+const { Header, Content } = Layout;
+const { TabPane } = Tabs;
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
@@ -25,28 +36,15 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [extractionModalVisible, setExtractionModalVisible] = useState(false);
   const [extractionStatus, setExtractionStatus] = useState(null);
-  const [dashboardData, setDashboardData] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
   const [form] = Form.useForm();
+  const [activeTabKey, setActiveTabKey] = useState('1');
 
   // Cargar datos del dashboard al iniciar
   useEffect(() => {
-    loadDashboardData();
     checkExtractionStatus();
+    const statusInterval = setInterval(checkExtractionStatus, 10000); // Check status every 10 seconds
+    return () => clearInterval(statusInterval);
   }, []);
-
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/dashboard/overview`);
-      setDashboardData(response.data);
-    } catch (error) {
-      message.error('Error cargando datos del dashboard');
-      console.error('Error loading dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const checkExtractionStatus = async () => {
     try {
@@ -69,214 +67,127 @@ function App() {
       message.success('Extracción de datos iniciada');
       setExtractionModalVisible(false);
       form.resetFields();
-      
-      // Verificar estado periódicamente
-      const interval = setInterval(async () => {
-        await checkExtractionStatus();
-        if (extractionStatus?.status === 'completed' || extractionStatus?.status === 'failed') {
-          clearInterval(interval);
-          await loadDashboardData();
-          if (extractionStatus?.status === 'completed') {
-            message.success('Extracción completada exitosamente');
-          } else {
-            message.error('Error en la extracción de datos');
-          }
-        }
-      }, 5000);
-      
+      checkExtractionStatus(); // Check status immediately
     } catch (error) {
       message.error('Error iniciando extracción de datos');
       console.error('Error starting extraction:', error);
+    }
+  };
+
+  const handleExport = (type) => {
+    message.info('Generando PDF...');
+    const doc = new jsPDF('p', 'pt', 'a4');
+    
+    // Lógica de exportación
+    // Esto requeriría capturar el contenido de cada pestaña como imagen o tabla
+    // y añadirlo al documento PDF.
+    // Ejemplo simple:
+    doc.text("Reporte vRx Dashboard", 40, 40);
+    doc.text(`Tipo de Reporte: ${type}`, 40, 60);
+    // ... añadir más contenido ...
+    
+    doc.save(`vRx-Report-${type}-${new Date().toISOString().split('T')[0]}.pdf`);
+    message.success('PDF generado exitosamente');
+  };
+
+  const showClearDbConfirm = () => {
+    Modal.confirm({
+      title: '¿Estás seguro de que quieres limpiar la base de datos?',
+      icon: <DeleteOutlined style={{ color: 'red' }} />,
+      content: 'Esta acción es irreversible y borrará todos los datos de endpoints, vulnerabilidades, tareas y extracciones.',
+      okText: 'Sí, limpiar',
+      okType: 'danger',
+      cancelText: 'No, cancelar',
+      onOk() {
+        handleClearDb();
+      },
+    });
+  };
+
+  const handleClearDb = async () => {
+    try {
+      setLoading(true);
+      await axios.post(`${API_BASE_URL}/database/clear`);
+      message.success('La base de datos ha sido limpiada exitosamente. La página se recargará.');
+      setTimeout(() => window.location.reload(), 1500); // Recargar para refrescar todo
+    } catch (error) {
+      message.error('Error al limpiar la base de datos.');
+      console.error('Error clearing database:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
-      case 'running':
-        return <SyncOutlined spin style={{ color: '#1890ff' }} />;
-      case 'failed':
-        return <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />;
-      default:
-        return <ClockCircleOutlined style={{ color: '#d9d9d9' }} />;
-    }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'completed':
-        return 'Completado';
-      case 'running':
-        return 'Ejecutándose';
-      case 'failed':
-        return 'Fallido';
-      default:
-        return 'Sin datos';
-    }
-  };
+  const exportMenu = (
+    <Menu onClick={(e) => handleExport(e.key)}>
+      <Menu.Item key="general">Reporte General</Menu.Item>
+      <Menu.Item key="overview">Exportar Resumen</Menu.Item>
+      <Menu.Item key="status">Exportar Estado de Endpoints</Menu.Item>
+      <Menu.Item key="top_apps">Exportar Top Aplicaciones Vulnerables</Menu.Item>
+      <Menu.Item key="top_remediated">Exportar Top Aplicaciones Remediadas</Menu.Item>
+      <Menu.Item key="comparison">Exportar Comparativo de Remediación</Menu.Item>
+    </Menu>
+  );
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ background: '#001529', padding: '0 24px' }}>
-        <div style={{ color: 'white', fontSize: '20px', fontWeight: 'bold' }}>
+      <Header className="dashboard-header">
+        <div className="dashboard-title">
           <SecurityScanOutlined style={{ marginRight: '8px' }} />
           vRx Dashboard
+        </div>
+        <div className="header-actions">
+          <Button 
+            icon={<SyncOutlined />} 
+            onClick={() => setExtractionModalVisible(true)}
+            loading={extractionStatus?.status === 'running'}
+          >
+            {extractionStatus?.status === 'running' ? 'Extrayendo...' : 'Extraer Datos'}
+          </Button>
+          <Dropdown overlay={exportMenu}>
+            <Button>
+              <FilePdfOutlined /> Exportar <DownOutlined />
+            </Button>
+          </Dropdown>
+          <Button 
+            danger
+            icon={<DeleteOutlined />} 
+            onClick={showClearDbConfirm}
+          >
+            Limpiar DB
+          </Dropdown>
         </div>
       </Header>
       
       <Layout>
-        <Sider width={200} style={{ background: '#fff' }}>
-          <div style={{ padding: '16px' }}>
-            <Button 
-              type="primary" 
-              icon={<SyncOutlined />} 
-              onClick={() => setExtractionModalVisible(true)}
-              style={{ width: '100%', marginBottom: '16px' }}
-            >
-              Extraer Datos
-            </Button>
-            
-            {extractionStatus && (
-              <Card size="small" style={{ marginBottom: '16px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ marginBottom: '8px' }}>
-                    {getStatusIcon(extractionStatus.status)}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    {getStatusText(extractionStatus.status)}
-                  </div>
-                  {extractionStatus.records_processed && (
-                    <div style={{ fontSize: '10px', color: '#999' }}>
-                      {extractionStatus.records_processed} registros
-                    </div>
-                  )}
-                </div>
-              </Card>
-            )}
-            
-            <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px' }}>
-              <div 
-                className={`menu-item ${activeTab === 'overview' ? 'active' : ''}`}
-                onClick={() => setActiveTab('overview')}
-              >
-                <DashboardOutlined /> Resumen
-              </div>
-              <div 
-                className={`menu-item ${activeTab === 'vulnerabilities' ? 'active' : ''}`}
-                onClick={() => setActiveTab('vulnerabilities')}
-              >
-                <SecurityScanOutlined /> Vulnerabilidades
-              </div>
-              <div 
-                className={`menu-item ${activeTab === 'endpoints' ? 'active' : ''}`}
-                onClick={() => setActiveTab('endpoints')}
-              >
-                <DesktopOutlined /> Endpoints
-              </div>
-              <div 
-                className={`menu-item ${activeTab === 'tasks' ? 'active' : ''}`}
-                onClick={() => setActiveTab('tasks')}
-              >
-                <ToolOutlined /> Tareas
-              </div>
-            </div>
-          </div>
-        </Sider>
-        
         <Content style={{ padding: '24px', background: '#f0f2f5' }}>
-          {loading && (
-            <div style={{ textAlign: 'center', padding: '50px' }}>
-              <Spin size="large" />
-            </div>
-          )}
-          
-          {activeTab === 'overview' && dashboardData && (
-            <div>
-              <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                <Col xs={24} sm={12} md={6}>
-                  <Card>
-                    <Statistic
-                      title="Total Endpoints"
-                      value={dashboardData.total_endpoints}
-                      prefix={<DesktopOutlined />}
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} md={6}>
-                  <Card>
-                    <Statistic
-                      title="Total Vulnerabilidades"
-                      value={dashboardData.total_vulnerabilities}
-                      prefix={<SecurityScanOutlined />}
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} md={6}>
-                  <Card>
-                    <Statistic
-                      title="Tareas Completadas"
-                      value={dashboardData.tasks_by_status?.Succeeded || 0}
-                      prefix={<CheckCircleOutlined />}
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} md={6}>
-                  <Card>
-                    <Statistic
-                      title="Última Actualización"
-                      value={dashboardData.last_update ? new Date(dashboardData.last_update).toLocaleDateString() : 'N/A'}
-                      prefix={<ClockCircleOutlined />}
-                    />
-                  </Card>
-                </Col>
-              </Row>
-              
-              <Row gutter={[16, 16]}>
-                <Col xs={24} lg={12}>
-                  <Card title="Vulnerabilidades por Severidad">
-                    <OverviewChart 
-                      data={dashboardData.vulnerabilities_by_severity} 
-                      type="pie"
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} lg={12}>
-                  <Card title="Endpoints por Sistema Operativo">
-                    <OverviewChart 
-                      data={dashboardData.endpoints_by_os} 
-                      type="bar"
-                    />
-                  </Card>
-                </Col>
-              </Row>
-              
-              <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
-                <Col xs={24}>
-                  <Card title="Estado de Tareas">
-                    <OverviewChart 
-                      data={dashboardData.tasks_by_status} 
-                      type="doughnut"
-                    />
-                  </Card>
-                </Col>
-              </Row>
-            </div>
-          )}
-          
-          {activeTab === 'vulnerabilities' && (
-            <VulnerabilitiesTable />
-          )}
-          
-          {activeTab === 'endpoints' && (
-            <EndpointsTable />
-          )}
-          
-          {activeTab === 'tasks' && (
-            <TasksTable />
-          )}
+          <Tabs activeKey={activeTabKey} onChange={setActiveTabKey}>
+            <TabPane tab={<span><DashboardOutlined />Resumen</span>} key="1">
+              <OverviewTab apiBaseUrl={API_BASE_URL} />
+            </TabPane>
+            <TabPane tab={<span><DesktopOutlined />Estado de Endpoints</span>} key="2">
+              <EndpointStatusTab apiBaseUrl={API_BASE_URL} />
+            </TabPane>
+            <TabPane tab={<span><SecurityScanOutlined />Top Apps Vulnerables</span>} key="3">
+              <TopAppsTab apiBaseUrl={API_BASE_URL} remediated={false} />
+            </TabPane>
+            <TabPane tab={<span><CheckCircleOutlined />Top Apps Remediadas</span>} key="4">
+              <TopAppsTab apiBaseUrl={API_BASE_URL} remediated={true} />
+            </TabPane>
+            <TabPane tab={<span><BarChartOutlined />Comparativo</span>} key="5">
+              <RemediationComparisonTab apiBaseUrl={API_BASE_URL} />
+            </TabPane>
+            {/* Pestañas de datos detallados añadidas */}
+            <TabPane tab={<span><BugOutlined />Vulnerabilidades (Detalle)</span>} key="6">
+              <VulnerabilitiesTable />
+            </TabPane>
+            <TabPane tab={<span><DesktopOutlined />Endpoints (Detalle)</span>} key="7">
+              <EndpointsTable />
+            </TabPane>
+            <TabPane tab={<span><UnorderedListOutlined />Tareas (Detalle)</span>} key="8">
+              <TasksTable />
+            </TabPane>
+          </Tabs>
         </Content>
       </Layout>
       
