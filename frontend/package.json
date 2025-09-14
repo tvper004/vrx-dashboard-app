@@ -16,7 +16,9 @@
     "@ant-design/icons": "^5.2.0",
     "moment": "^2.29.4",
     "lodash": "^4.17.21",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2"
   },
   "scripts": {
     "start": "react-scripts start",
