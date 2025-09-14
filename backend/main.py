@@ -4,7 +4,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
@@ -15,7 +15,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import json
@@ -25,7 +25,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuración de base de datos
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/vrx_dashboard")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    logger.error("FATAL: La variable de entorno DATABASE_URL no está configurada.")
+    # En un entorno real, podrías querer que esto lance una excepción para detener el inicio.
+    # Por ahora, el log de error será nuestra advertencia principal.
 
 # Crear engine de SQLAlchemy
 engine = create_engine(DATABASE_URL)
@@ -57,10 +61,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Configuración de CORS
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especificar dominios específicos
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -86,8 +93,8 @@ class ExtractionRequest(BaseModel):
 # Rutas de la API
 
 @app.get("/")
-async def root():
-    return {"message": "vRx Dashboard API", "version": "1.0.0", "status": "running"}
+async def read_index():
+    return FileResponse("static/index.html")
 
 @app.get("/health")
 async def health_check():
