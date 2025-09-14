@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: vrx_dashboard
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password} # Usa variable de entorno, con 'password' como default
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Requiere la variable desde Easypanel
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
@@ -27,12 +27,12 @@ services:
     build: .
     container_name: vrx-dashboard-app
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/vrx_dashboard
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/vrx_dashboard
       API_HOST: 0.0.0.0
       API_PORT: 8000
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8000}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8000,http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
     ports:
       - "8000:8000"
     depends_on:
