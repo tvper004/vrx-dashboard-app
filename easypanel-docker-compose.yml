@@ -25,8 +25,10 @@ services:
 
   # Aplicación principal
   app:
-    build: .
     container_name: vrx-dashboard-app
+    build:
+      context: .
+      dockerfile: Dockerfile.easypanel
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/vrx_dashboard
       API_HOST: 0.0.0.0
@@ -40,8 +42,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./vRx-Report:/app/vRx-Report
-      - reports_data:/app/vRx-Report/reports
+      - reports_data:/app/vRx-Report/reports # Mantenemos solo el volumen para los datos generados
     networks:
       - vrx-network
     restart: unless-stopped
