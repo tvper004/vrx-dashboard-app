@@ -30,6 +30,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    ports:
+      - "8000:8000"
     volumes:
       - reports_data:/app/vRx-Report/reports
     restart: unless-stopped
