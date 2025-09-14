@@ -4,8 +4,8 @@ import pandas as pd
 
 
 def get_mitigation_time():
-        events_report_path = f'reports\\EndpointIncidentesVulnerabilitiesND.csv'
-        mitigation_report_path = f'reports\\MitigationTime.csv'
+        events_report_path = f'reports/EndpointIncidentesVulnerabilitiesND.csv'
+        mitigation_report_path = f'reports/MitigationTime.csv'
         df = pd.read_csv(events_report_path, encoding='utf-8')
         df['eventcreatedat'] = pd.to_numeric(df['eventcreatedat'], errors='coerce', downcast='integer')
         df['eventupdatedat'] = pd.to_numeric(df['eventupdatedat'], errors='coerce', downcast='integer')
@@ -22,5 +22,3 @@ def get_mitigation_time():
                                         else None, axis=1)
 
         mitigated_events.to_csv(mitigation_report_path, index=False)
-
-
