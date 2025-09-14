@@ -1,14 +1,15 @@
-# Dockerfile para vRx Dashboard App
+# Dockerfile optimizado para Easypanel
 FROM node:18-alpine AS frontend-builder
 
 # Construir frontend
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci --only=production
+RUN npm install --only=production
 COPY frontend/ ./
+ENV PUBLIC_URL=/static
 RUN npm run build
 
-# Imagen final con Python y Node.js
+# Imagen final con Python
 FROM python:3.11-slim
 
 # Instalar dependencias del sistema
@@ -38,7 +39,6 @@ RUN mkdir -p /app/vRx-Report/reports
 
 # Configurar variables de entorno
 ENV PYTHONPATH=/app
-ENV DATABASE_URL=postgresql://postgres:password@postgres:5432/vrx_dashboard
 ENV API_HOST=0.0.0.0
 ENV API_PORT=8000
 
@@ -46,4 +46,4 @@ ENV API_PORT=8000
 EXPOSE 8000
 
 # Comando de inicio
-CMD ["python", "main.py"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
