@@ -19,7 +19,7 @@ import './App.css';
 
 const { Header, Content, Sider } = Layout;
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 function App() {
   const [loading, setLoading] = useState(false);
