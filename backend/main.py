@@ -1,7 +1,7 @@
 # vRx Dashboard App - Backend API
 # FastAPI application for Vicarius data extraction and dashboard
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -17,10 +17,12 @@ import time
 from typing import List, Optional, Dict, Any
 import asyncio
 from contextlib import asynccontextmanager 
+from fastapi.responses import StreamingResponse
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import io
 import json
+import uuid
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +39,9 @@ if not DATABASE_URL:
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Almacenamiento en memoria para los logs de extracción en tiempo real
+extraction_streams: Dict[str, List[str]] = {}
 
 # Configuración de la aplicación FastAPI
 @asynccontextmanager
@@ -156,12 +161,14 @@ async def extract_data(request: ExtractionRequest, background_tasks: BackgroundT
             conn.commit()
         
         # Iniciar extracción en segundo plano
-        background_tasks.add_task(run_data_extraction, request.api_key, request.dashboard_url, request.extraction_type)
+        extraction_id = str(uuid.uuid4())
+        background_tasks.add_task(run_data_extraction, request.api_key, request.dashboard_url, request.extraction_type, extraction_id)
         
         return {
             "message": "Extracción de datos iniciada",
             "extraction_type": request.extraction_type,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "extraction_id": extraction_id
         }
         
     except Exception as e:
@@ -509,13 +516,41 @@ async def clear_database():
         logger.error(f"Error limpiando la base de datos: {e}")
         raise HTTPException(status_code=500, detail=f"Error limpiando la base de datos: {str(e)}")
 
+@app.get("/stream-extraction-logs/{extraction_id}")
+async def stream_extraction_logs(extraction_id: str):
+    """
+    Endpoint de Server-Sent Events (SSE) para transmitir logs de extracción en tiempo real.
+    """
+    async def event_generator():
+        last_line_sent = 0
+        try:
+            while True:
+                if extraction_id in extraction_streams:
+                    log_lines = extraction_streams[extraction_id]
+                    if len(log_lines) > last_line_sent:
+                        for i in range(last_line_sent, len(log_lines)):
+                            line = log_lines[i]
+                            yield f"data: {line}\n\n"
+                            if line.startswith("__END__") or line.startswith("__ERROR__"):
+                                del extraction_streams[extraction_id] # Limpiar memoria
+                                return
+                        last_line_sent = len(log_lines)
+                await asyncio.sleep(1) # Esperar 1 segundo antes de volver a comprobar
+        except asyncio.CancelledError:
+            logger.info(f"Cliente desconectado del stream {extraction_id}")
+            if extraction_id in extraction_streams:
+                del extraction_streams[extraction_id]
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 # Función para ejecutar la extracción de datos
-async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type: str):
+async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type: str, extraction_id: str):
     """Ejecutar extracción de datos usando el script Python existente"""
     # Timeout de seguridad para el script (1 hora)
     SCRIPT_TIMEOUT = 3600
 
     try:
+        extraction_streams[extraction_id] = ["Iniciando proceso de extracción..."]
         # Registrar inicio de extracción
         with engine.connect() as conn:
             conn.execute(text("""
@@ -541,22 +576,26 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
         logger.info(f"Ejecutando comando: {' '.join(cmd)} con un timeout de {SCRIPT_TIMEOUT} segundos.")
         
         # Ejecutar el comando
-        process = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd="/app/vRx-Report",
-            timeout=SCRIPT_TIMEOUT
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT, # Redirigir stderr a stdout
+            cwd="/app/vRx-Report"
         )
-        
-        # Loguear la salida del script para diagnóstico
-        if process.stdout:
-            logger.info(f"Salida del script (stdout):\n{process.stdout}")
-        if process.stderr:
-            # Loguear stderr como warning incluso si el proceso tiene éxito, ya que puede contener información útil
-            logger.warning(f"Salida de errores del script (stderr):\n{process.stderr}")
+
+        # Leer la salida en tiempo real
+        while True:
+            line_bytes = await process.stdout.readline()
+            if not line_bytes:
+                break
+            line = line_bytes.decode('utf-8', errors='ignore').strip()
+            logger.info(f"[Script Salida] {line}")
+            extraction_streams[extraction_id].append(line)
+
+        await process.wait()
 
         if process.returncode == 0:
+            extraction_streams[extraction_id].append("Procesando archivos CSV y cargando en la base de datos...")
             # Procesar archivos CSV y cargar en base de datos
             await process_csv_files()
             
@@ -575,8 +614,10 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                 })
                 conn.commit()
             
+            extraction_streams[extraction_id].append("__END__")
             logger.info("Extracción completada exitosamente")
         else:
+            error_message = f"El script de extracción finalizó con código de error {process.returncode}."
             # Registrar error
             with engine.connect() as conn:
                 conn.execute(text("""
@@ -587,22 +628,19 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                     ORDER BY created_at DESC LIMIT 1
                 """), {
                     "status": "failed",
-                    "error_message": process.stderr,
+                    "error_message": error_message,
                     "completed_at": datetime.now(),
                     "extraction_type": extraction_type
                 })
                 conn.commit()
             
-            logger.error(f"Error en extracción: {process.stderr}")
+            extraction_streams[extraction_id].append(f"__ERROR__:{error_message}")
+            logger.error(f"Error en extracción: {error_message}")
             
     except subprocess.TimeoutExpired as e:
         error_message = f"La extracción excedió el tiempo límite de {SCRIPT_TIMEOUT} segundos. Esto puede deberse a un gran volumen de datos o a un problema con la API de Vicarius. Revisa los logs para más detalles."
         logger.error(error_message)
-        if e.stdout:
-            logger.info(f"Salida del script antes del timeout (stdout):\n{e.stdout}")
-        if e.stderr:
-            logger.error(f"Errores del script antes del timeout (stderr):\n{e.stderr}")
-        
+        extraction_streams[extraction_id].append(f"__ERROR__:{error_message}")
         with engine.connect() as conn:
             conn.execute(text("""
                 UPDATE extraction_logs SET status = :status, error_message = :error_message, completed_at = :completed_at
@@ -614,6 +652,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
         logger.error(f"Error ejecutando extracción: {e}")
         
         # Registrar error
+        extraction_streams[extraction_id].append(f"__ERROR__:Error inesperado en el servidor: {str(e)}")
         with engine.connect() as conn:
             conn.execute(text("""
                 UPDATE extraction_logs 
