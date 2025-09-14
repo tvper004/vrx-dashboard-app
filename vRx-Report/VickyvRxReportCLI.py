@@ -494,40 +494,48 @@ def getAllEndpointsVulnerabilities(fr0m,siz3,minDate,maxDate,endpointName,endpoi
         print (e)
 
 def ReportVunerabilities():
-   
-    df = pd.read_csv(dictState['reportAssets'])
-    print(len(df.index))
+    try:
+        df = pd.read_csv(dictState['reportAssets'])
+        if df.empty:
+            print("Asset report is empty. Skipping vulnerabilities report.")
+            return
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        print(f"Warning: Asset report '{dictState['reportAssets']}' not found or is empty. Skipping vulnerabilities report.")
+        return
 
+    try:
+        dfg = pd.read_csv(dictState['reportEndpointGroups'])
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        print(f"Warning: Endpoint groups report '{dictState['reportEndpointGroups']}' not found or is empty. Group information will be missing.")
+        # Create an empty dataframe with the expected column to avoid crashing SearchGroupsbyEndpoint
+        dfg = pd.DataFrame(columns=['groupname', 'assets'])
+
+    print(f"Total assets to process for vulnerabilities: {len(df.index)}")
     df = df.sort_values(by='endpointUpdatedAt', ascending=False)
-
     df = df.drop_duplicates(subset=['HOSTNAME'], keep='first')
-    print(len(df.index))
-
-    dfg = pd.read_csv(dictState['reportEndpointGroups'])
+    print(f"Unique assets to process: {len(df.index)}")
 
     fr0m = 0
     siz3 = 500
-    totalPatchs = 0
 
     head = "asset,assethash,group,productName,productRawEntryName,sensitivityLevelName,cve,vulnerabilityid,patchid,patchName,patchReleaseDate,createAt,updateAt,link,vulnerabilitySummary,V3BaseScore,V3ExploitabilityLevel\n"
-    writeReport(dictState['reportNameVulnerabilities'],head)
+    create_or_update_file(dictState['reportNameVulnerabilities'], head)
 
-    with tqdm(total=len(df.index),desc="Endpoint Activities Vul") as pbar:  
-        print()
-        dateNow = datetime.now()
+    dateNow = datetime.now()
+    minDate = 0
+    maxDate = str(int(float(dateNow.timestamp())*1000))
 
-        minDate = 0000000000000
-        maxDate = str(int(float(dateNow.timestamp())*1000))
-
-        for ind in df.index:
-            pbar.update()
-            endpointName = df['HOSTNAME'][ind]
-            endpointHash = df['HASH'][ind]
-            endpointSO = df['SO'][ind]
-            control_rate()            
-            endpointGroups = SearchGroupsbyEndpoint(endpointName,dfg)
-            getAllEndpointsVulnerabilities(fr0m,siz3,minDate,maxDate,endpointName,endpointHash,endpointGroups)
-        pbar.close()
+    try:
+        with tqdm(total=len(df.index), desc="Endpoint Activities Vul") as pbar:
+            for ind in df.index:
+                endpointName = df['HOSTNAME'][ind]
+                endpointHash = df['HASH'][ind]
+                control_rate()
+                endpointGroups = SearchGroupsbyEndpoint(endpointName, dfg)
+                getAllEndpointsVulnerabilities(fr0m, siz3, minDate, maxDate, endpointName, endpointHash, endpointGroups)
+                pbar.update(1)
+    except Exception as e:
+        print(f"An unexpected error occurred during ReportVunerabilities: {e}")
 
 def getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalPatchs):
     control_rate()

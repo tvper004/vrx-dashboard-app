@@ -54,11 +54,19 @@ def parseEndpointVulnerabilities(jresponse,endpointGroups):
 
     for i in jresponse['serverResponseObject']:
 
-        #print (i['organizationEndpointVulnerabilitiesVulnerability']['vulnerabilityV3Vector'])
-        
-        cve = i['organizationEndpointVulnerabilitiesVulnerability']['vulnerabilityExternalReference']['externalReferenceExternalId']
         vulid = str(i['organizationEndpointVulnerabilitiesVulnerability']['vulnerabilityId'])
-        link = 'https://www.vicarius.io/research-center/vulnerability/'+ cve + '-id' + vulid
+        try:
+            # Safely access the external reference, which may not always exist.
+            ext_ref = i['organizationEndpointVulnerabilitiesVulnerability']['vulnerabilityExternalReference']
+            if ext_ref and 'externalReferenceExternalId' in ext_ref:
+                cve = ext_ref['externalReferenceExternalId']
+                link = f'https://www.vicarius.io/research-center/vulnerability/{cve}-id{vulid}'
+            else:
+                raise KeyError # Force fallback to default values
+        except (KeyError, TypeError):
+            cve = "N/A"
+            link = ""
+
         # fix for empty product name for OS
         try:
             productName = i['organizationEndpointVulnerabilitiesProduct']['productName']
