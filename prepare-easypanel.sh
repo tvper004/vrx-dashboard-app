@@ -211,7 +211,7 @@ ENV API_PORT=8000
 EXPOSE 8000
 
 # Comando de inicio
-CMD ["python", "main.py"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
 EOF
 
 print_status "Dockerfile optimizado creado ✓"
