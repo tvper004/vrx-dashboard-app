@@ -6,7 +6,7 @@ def cleanData():
     chunk_size = 10**6  # Adjust as needed
 
     # load Vulnerabilties.csv file to dataframe 
-    vulnerabilties_df = pd.read_csv('reports\\Vulnerabilities.csv')
+    vulnerabilties_df = pd.read_csv('reports/Vulnerabilities.csv')
     # delete duplicates rows based on assethas and cve
     vulnerabilties_df.drop_duplicates(subset=['assethash', 'cve'], keep='first', inplace=True)
     vulnerabilties_df.to_csv('reports\\VulnerabilitiesND.csv', index=False)
@@ -21,7 +21,7 @@ def cleanData():
     events_df.head()
 
     #load Endpoints.csv file to dataframe
-    endpoints_df = pd.read_csv('reports\\Endpoints.csv')
+    endpoints_df = pd.read_csv('reports/Endpoints.csv')
 
     # assing to events_df the following column names "assetid", "asset", "cve", "severity", "eventType", "publisher", "apporso", "threatLevelId", "vulV3exploitlevel", "vulv3basescore", "patchId", "vulsummary", "eventcreatedat", "eventupdatedat", "MitigatedEventDetectionDate"
     events_df.columns = ["assetid", "asset", "cve", "severity", "eventType", "publisher", "apporso", "threatLevelId", "vulV3exploitlevel", "vulv3basescore", "patchId", "vulsummary", "eventcreatedat", "eventupdatedat", "MitigatedEventDetectionDate"]
