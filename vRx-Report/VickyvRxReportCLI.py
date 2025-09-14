@@ -304,7 +304,7 @@ def getAllIncidentEventVulnerabilities(fr0m,siz3,incidenttype,minDate,maxDate):
     print("maxDate->"+maxDate)
 
     time.sleep(3)
-    jresponse = incidents.getIncidentEventsbyType(apikey,urldashboard,fr0m,siz3,incidenttype,minDate,maxDate) 
+    jresponse = incidents.getIncidentEventsbyType(apikey,urldashboard,fr0m,siz3,incidenttype,minDate,maxDate)
 
     if jresponse is None:
         print("jresponse is None, retrying in 10 seconds...")
@@ -531,10 +531,6 @@ def ReportVunerabilities():
     head = "asset,assethash,group,productName,productRawEntryName,sensitivityLevelName,cve,vulnerabilityid,patchid,patchName,patchReleaseDate,createAt,updateAt,link,vulnerabilitySummary,V3BaseScore,V3ExploitabilityLevel\n"
     create_or_update_file(dictState['reportNameVulnerabilities'], head)
 
-    dateNow = datetime.now()
-    minDate = 0
-    maxDate = str(int(float(dateNow.timestamp())*1000))
-
     try:
         with tqdm(total=len(df.index), desc="Endpoint Activities Vul") as pbar:
             for ind in df.index:
@@ -594,6 +590,183 @@ def ReportEndpointPatchs():
             endpointGroups = SearchGroupsbyEndpoint(endpointName,dfg)
             # BUG FIX: Reset totalPatchs for each endpoint to count them correctly.
             totalPatchs = 0
+            control_rate()
+            getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalPatchs)
+
+        pbar.close()
+
+def ReportGroupsSearchs():
+    control_rate(20)
+    groupscount = groups.getEndpointGroupsCount(apikey,urldashboard)
+    print("Endpoints Groups-> " + str(groupscount))
+    fr0m = 0       
+    
+    if fr0m < groupscount:
+        #deltacount = endpointcount - fr0m
+        endpointsGroups = ""
+        with tqdm(total=groupscount,desc="EndpointGroups") as pbar:
+            control_rate(20)            
+            getAllGroupsSearchs(fr0m,500,groupscount,pbar,endpointsGroups)
+    else:
+        print("Done!")
+
+def resetState():
+    dictState.update({'lastEndpointVulnerabilities': 0})
+    dictState.update({'lastEndpoints':0})
+    dictState.update({'lastEndpointsEventTask':0})
+    dictState.update({'lastProductVersions':0})
+    dictState.update({'lastPatchsEndpoint':0})
+    dictState.update({'minDateIncidentEventVulnerabilities':0}) #minDateIncidentEventVulnerabilities
+    dictState.update({'lastIncidentEventVulnerabilities':0})    
+    state.setState(dictState)
+    print("Done!")
+
+def updateState():
+    lastEndpointsEventTask = cd.getLastEndpointsEventTask ()
+    minDateIncidentEventVulnerabilities = cd.getLastIncidentEventVulnerabilities ()
+    dictState.update({'lastEndpointVulnerabilities': 0})
+    dictState.update({'lastEndpoints':0})
+    dictState.update({'lastEndpointsEventTask': lastEndpointsEventTask})
+    dictState.update({'lastProductVersions':0})
+    dictState.update({'lastPatchsEndpoint':0})
+    dictState.update({'minDateIncidentEventVulnerabilities': minDateIncidentEventVulnerabilities}) #minDateIncidentEventVulnerabilities
+    dictState.update({'lastIncidentEventVulnerabilities':0})    
+    state.setState(dictState)
+    print("Done!")
+
+def delete_file(file_path):
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        print(f"{file_path} file deleted ok.")
+    else:
+        print(f"{file_path} no file found, create a new")
+
+def create_or_update_file(file_path, header):
+    if not os.path.exists(file_path):
+        with open(file_path, 'w') as textfile:
+            textfile.write(header)
+        print(f"created {file_path}.")
+    else:
+        print()
+
+def main():
+    args.dashboard    
+    if args.allreports:
+        delete_file('reports/MitigationTime.csv')
+        delete_file('reports/EndpointIncidentesVulnerabilitiesND.csv')
+        delete_file('reports/VulnerabilitiesND.csv')
+        delete_file('reports/EndpointCountPatchs.csv')
+        delete_file('reports/EndpointPatchs.csv')
+        delete_file('reports/Vulnerabilities.csv')
+        delete_file('reports/EndpointsGroup.csv')
+        delete_file('reports/Endpoints.csv')
+        
+        ReportEndpoints()
+        ReportGroupsSearchs()
+        ReportTaskEvents()
+        ReportVunerabilities()
+        ReportEndpointPatchs()
+        ReportIncident()
+        cd.cleanData()
+        mt.get_mitigation_time()
+        
+    
+    elif args.assetsreport:
+        ReportEndpoints()
+        #ReportEndpointsAttributes()
+        #ReportEndpointScores()        
+        #ReportGroupsAtrributesTags()
+        ReportGroupsSearchs()
+    
+    elif args.tasksreport:
+        ReportTaskEvents()
+
+    elif args.vulnreport:
+        ReportVunerabilities()        
+
+    elif args.patchsreport:
+        ReportEndpointPatchs()
+
+    elif args.incidentvulreport:
+        ReportIncident()
+   
+    elif args.resetstate:
+        resetState()
+    elif args.mitigationtime:
+        mt.get_mitigation_time()
+    
+    elif args.cleandata:
+        cd.cleanData()
+    
+    elif args.updatestate:
+        updateState ()
+
+    else:
+        print("Select one report and try again!!!")
+
+if __name__ == '__main__':
+    main()
+        dateNow = datetime.now()
+
+        minDate = 0000000000000
+        maxDate = str(int(float(dateNow.timestamp())*1000))
+
+        for ind in df.index:
+            pbar.update()
+            endpointName = df['HOSTNAME'][ind]
+            endpointHash = df['HASH'][ind]
+            endpointSO = df['SO'][ind]
+            control_rate()            
+            endpointGroups = SearchGroupsbyEndpoint(endpointName,dfg)
+            getAllEndpointsVulnerabilities(fr0m,siz3,minDate,maxDate,endpointName,endpointHash,endpointGroups)
+        pbar.close()
+
+def getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalPatchs):
+    control_rate()
+    strEndpointPatchs,tmpPatchs = patchs.getEndpointsPatchs(apikey,urldashboard,fr0m,siz3,endpointName,endpointSO,endpointGroups)
+
+    totalPatchs += tmpPatchs
+
+    if len(strEndpointPatchs) > 0:
+        writeReport(dictState['reportNameEndpointPatchs'],strEndpointPatchs)        
+    
+    if tmpPatchs >= siz3:
+        fr0m += siz3
+        control_rate()
+        getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalPatchs)
+    
+    else:
+        strcountendpointpatchs = endpointName + "," + str(totalPatchs) + "\n"
+        writeReport(dictState['reportCountEndpointPatchs'],strcountendpointpatchs)
+
+
+def ReportEndpointPatchs():
+    # get the assets
+    df = pd.read_csv(dictState['reportAssets'])
+    #dduplication hostname
+    df = df.drop_duplicates(subset=['HOSTNAME'], keep='first')
+
+    # get Groups
+    dfg = pd.read_csv(dictState['reportEndpointGroups'])
+
+    fr0m = 0
+    siz3 = 500
+    totalPatchs = 0
+
+    strcountendpointpatchs = "Asset,TotalPactchs\n"
+    writeReport(dictState['reportCountEndpointPatchs'],strcountendpointpatchs)
+
+    strEndpointPatchs = "Asset,SO,PatchName,SeverityLevel,SeverityName,Description,PatchID\n"
+    writeReport(dictState['reportNameEndpointPatchs'],strEndpointPatchs)
+
+    with tqdm(total=len(df.index),desc="Endpoint Pacths") as pbar:            
+        for ind in df.index:
+            pbar.update()
+            endpointHash = df['HASH'][ind]
+            endpointName = df['HOSTNAME'][ind]
+            endpointSO = df['SO'][ind]  
+            control_rate()          
+            endpointGroups = SearchGroupsbyEndpoint(endpointName,dfg)
             control_rate()
             getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalPatchs)
 

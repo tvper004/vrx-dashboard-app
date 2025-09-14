@@ -50,8 +50,8 @@ def getEndpointVulnerabilities(apikey,urldashboard,fr0m,siz3,minDate,maxDate,end
     return jresponse
 
 def parseEndpointVulnerabilities(jresponse,endpointGroups):
-    strVulnerabilities = ""
-
+    strVulnerabilities = ""    
+    maxDate = None
     for i in jresponse['serverResponseObject']:
 
         vulid = str(i['organizationEndpointVulnerabilitiesVulnerability']['vulnerabilityId'])
@@ -86,7 +86,6 @@ def parseEndpointVulnerabilities(jresponse,endpointGroups):
         endpointHash = i['organizationEndpointVulnerabilitiesEndpoint']['endpointHash']
 
         if i['organizationEndpointVulnerabilitiesPatch']['patchId'] > 0:
-            print (i['organizationEndpointVulnerabilitiesPatch'])
             patchid = str(i['organizationEndpointVulnerabilitiesPatch']['patchId'])
             patchName = (i['organizationEndpointVulnerabilitiesPatch']['patchName'])
             #handle exception when patchReleaseDate not present
