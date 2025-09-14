@@ -15,8 +15,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - vrx-network
     restart: unless-stopped
 
   # Aplicación principal
@@ -34,8 +32,6 @@ services:
         condition: service_healthy
     volumes:
       - reports_data:/app/vRx-Report/reports
-    networks:
-      - vrx-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -47,6 +43,3 @@ services:
 volumes:
   postgres_data:
   reports_data:
-
-networks:
-  vrx-network:
