@@ -735,8 +735,7 @@ async def bulk_load_csv(file_path: str, table_name: str, columns: list):
 async def load_endpoints_csv(file_path: str):
     """Cargar datos de endpoints desde CSV"""
     columns = [
-        'ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 
-        'status', 'sub_status', 'endpointUpdatedAt'
+        'ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt'
     ]
     # Renombrar columnas para coincidir con la tabla
     # Esta parte se manejará en la función bulk_load_csv
