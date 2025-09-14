@@ -6,6 +6,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install --only=production
 COPY frontend/ ./
+ENV PUBLIC_URL=/static
 RUN npm run build
 
 # Imagen final con Python
