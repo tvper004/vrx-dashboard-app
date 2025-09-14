@@ -699,11 +699,14 @@ async def process_csv_files():
         logger.error(f"Error procesando archivos CSV: {e}")
         raise
 
-async def bulk_load_csv(file_path: str, table_name: str, columns: list):
+async def bulk_load_csv(file_path: str, table_name: str, columns: list, column_mapping: dict = None):
     """Carga datos desde un archivo CSV a una tabla usando el comando COPY de PostgreSQL."""
     try:
         df = pd.read_csv(file_path, usecols=columns)
-        df = df.reindex(columns=columns) # Asegurar el orden de las columnas
+        
+        db_columns = list(columns) # Copia de la lista de columnas
+        if column_mapping:
+            db_columns = [column_mapping.get(c, c) for c in columns]
 
         # Limpiar datos: reemplazar NaN por None (NULL en SQL) y manejar saltos de línea
         df = df.replace({pd.NA: None, pd.NaT: None})
@@ -714,6 +717,7 @@ async def bulk_load_csv(file_path: str, table_name: str, columns: list):
             raw_conn = conn.connection
             with raw_conn.cursor() as cursor:
                 # Vaciar la tabla antes de cargar nuevos datos
+                logger.info(f"Truncando tabla '{table_name}' antes de la carga masiva.")
                 cursor.execute(f"TRUNCATE TABLE {table_name} RESTART IDENTITY;")
                 
                 # Preparar CSV en memoria
@@ -723,7 +727,7 @@ async def bulk_load_csv(file_path: str, table_name: str, columns: list):
                 
                 # Ejecutar COPY
                 cursor.copy_expert(
-                    f"COPY {table_name} ({','.join(columns)}) FROM STDIN WITH (FORMAT csv, DELIMITER E'\\t', NULL '\\N')",
+                    f"COPY {table_name} ({','.join(db_columns)}) FROM STDIN WITH (FORMAT csv, DELIMITER E'\\t', NULL '\\N')",
                     output
                 )
             conn.commit()
@@ -737,9 +741,16 @@ async def load_endpoints_csv(file_path: str):
     columns = [
         'ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt'
     ]
-    # Renombrar columnas para coincidir con la tabla
-    # Esta parte se manejará en la función bulk_load_csv
-    await bulk_load_csv(file_path, 'endpoints', columns)
+    # Mapeo de nombres de columna del CSV a la Base de Datos
+    column_mapping = {
+        'ID': 'endpoint_id',
+        'HOSTNAME': 'hostname',
+        'HASH': 'hash',
+        'SO': 'operating_system',
+        'VERSION': 'version',
+        'endpointUpdatedAt': 'endpoint_updated_at'
+    }
+    await bulk_load_csv(file_path, 'endpoints', columns, column_mapping)
 
 async def load_vulnerabilities_csv(file_path: str):
     """Cargar datos de vulnerabilidades desde CSV"""
