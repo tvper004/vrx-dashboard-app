@@ -155,7 +155,7 @@ function App() {
             onClick={showClearDbConfirm}
           >
             Limpiar DB
-          </Dropdown>
+          </Button>
         </div>
       </Header>
       
