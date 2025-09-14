@@ -523,19 +523,30 @@ async def stream_extraction_logs(extraction_id: str):
     """
     async def event_generator():
         last_line_sent = 0
+        heartbeat_counter = 0
         try:
             while True:
                 if extraction_id in extraction_streams:
                     log_lines = extraction_streams[extraction_id]
                     if len(log_lines) > last_line_sent:
+                        heartbeat_counter = 0 # Reiniciar contador porque hay datos
                         for i in range(last_line_sent, len(log_lines)):
                             line = log_lines[i]
                             yield f"data: {line}\n\n"
                             if line.startswith("__END__") or line.startswith("__ERROR__"):
-                                del extraction_streams[extraction_id] # Limpiar memoria
+                                if extraction_id in extraction_streams:
+                                    del extraction_streams[extraction_id] # Limpiar memoria
                                 return
                         last_line_sent = len(log_lines)
-                await asyncio.sleep(1) # Esperar 1 segundo antes de volver a comprobar
+                
+                await asyncio.sleep(1) # Esperar 1 segundo
+                heartbeat_counter += 1
+
+                # Enviar un "latido" cada 15 segundos de inactividad para mantener la conexión viva
+                if heartbeat_counter >= 15:
+                    yield ": heartbeat\n\n"
+                    heartbeat_counter = 0
+
         except asyncio.CancelledError:
             logger.info(f"Cliente desconectado del stream {extraction_id}")
             if extraction_id in extraction_streams:
