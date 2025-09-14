@@ -117,6 +117,19 @@
   margin-bottom: 16px;
 }
 
+.terminal-output {
+  background-color: #000;
+  color: #00ff00;
+  font-family: 'Courier New', Courier, monospace;
+  padding: 15px;
+  border-radius: 5px;
+  height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+
 @media (max-width: 768px) {
   .overview-stats .ant-col {
     margin-bottom: 16px;

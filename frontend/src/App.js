@@ -38,6 +38,9 @@ function App() {
   const [extractionStatus, setExtractionStatus] = useState(null);
   const [form] = Form.useForm();
   const [activeTabKey, setActiveTabKey] = useState('1');
+  const [logModalVisible, setLogModalVisible] = useState(false);
+  const [logContent, setLogContent] = useState('');
+  const [isExtractionFinished, setIsExtractionFinished] = useState(false);
 
   // Cargar datos del dashboard al iniciar
   useEffect(() => {
@@ -57,16 +60,47 @@ function App() {
 
   const handleExtraction = async (values) => {
     try {
-      setLoading(true);
-      await axios.post(`${API_BASE_URL}/extract-data`, {
+      const response = await axios.post(`${API_BASE_URL}/extract-data`, {
         api_key: values.api_key,
         dashboard_url: values.dashboard_url,
         extraction_type: 'all'
       });
       
       message.success('Extracción de datos iniciada');
-      setExtractionModalVisible(false);
       form.resetFields();
+      setExtractionModalVisible(false);
+
+      // Iniciar el modal de logs
+      const extractionId = response.data.extraction_id;
+      if (extractionId) {
+        setLogContent('Iniciando conexión con el servidor...\n');
+        setIsExtractionFinished(false);
+        setLogModalVisible(true);
+
+        const eventSource = new EventSource(`${API_BASE_URL}/stream-extraction-logs/${extractionId}`);
+        
+        eventSource.onmessage = (event) => {
+          const data = event.data;
+          if (data.startsWith('__END__')) {
+            setLogContent(prev => prev + '\n\n✅ Proceso completado exitosamente.\n');
+            setIsExtractionFinished(true);
+            eventSource.close();
+          } else if (data.startsWith('__ERROR__:')) {
+            const errorMsg = data.replace('__ERROR__:', '');
+            setLogContent(prev => prev + `\n\n❌ ERROR: ${errorMsg}\n`);
+            setIsExtractionFinished(true);
+            eventSource.close();
+          } else {
+            setLogContent(prev => prev + data + '\n');
+          }
+        };
+
+        eventSource.onerror = () => {
+          setLogContent(prev => prev + '\n\n❌ Error de conexión con el stream de logs. El proceso puede continuar en segundo plano.\n');
+          setIsExtractionFinished(true);
+          eventSource.close();
+        };
+      }
       checkExtractionStatus(); // Check status immediately
     } catch (error) {
       message.error('Error iniciando extracción de datos');
@@ -222,6 +256,27 @@ function App() {
             </Button>
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="Progreso de la Extracción"
+        open={logModalVisible}
+        onCancel={() => setLogModalVisible(false)}
+        width={800}
+        footer={[
+          <Button key="close" onClick={() => setLogModalVisible(false)} disabled={!isExtractionFinished}>
+            Cerrar
+          </Button>
+        ]}
+      >
+        <div className="terminal-output">
+          <pre>
+            <code>
+              {logContent}
+            </code>
+          </pre>
+          {!isExtractionFinished && <Spin style={{ marginLeft: '10px' }} />}
+        </div>
       </Modal>
     </Layout>
   );
