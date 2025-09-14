@@ -1,0 +1,8 @@
+"lastEndpoints": 0,
+"lastEndpointsEventTask": 0,
+"minDateIncidentEventVulnerabilities": 0,
+
+------------------------------------------------------------
+Unicon
+
+py VickyvRxReportCLI.py -k NEoLXlK8jpFMsMIjTphpTp9OZejI7veKJ6SRiHcv83Z1Ee5k1KY0QxXV8xv5nqw3gTWlSYiY7d6gHJcYFiZgZzKmKZpEwEkiRg70PciohRBjPTVSsdY0dkPsHFj6YKIrEfQ5sQmnBz8BGKu37JIpMoOoYah5gZmZuzqFa9CzpkUn3PW988Z5qPFPGTfgutVHMYzVrykFIGkUldvIpUWvKuF2wOYiBAsQPtpFRubZ8E86AOu3gc6qg6JaLx2481rD -d https://unicon.vicarius.cloud/ --allreports
