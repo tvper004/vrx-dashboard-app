@@ -42,20 +42,20 @@ Base = declarative_base()
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting vRx Dashboard API...")
-    # Reintentar conexión a la base de datos para manejar condiciones de carrera en el arranque
+    # Reintentar conexión a la base de datos para manejar condiciones de carrera
     max_retries = 10
     retry_delay = 5  # segundos
     for attempt in range(max_retries):
         try:
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            logger.info("Database connection successful.")
+            logger.info("Database connection successful!")
             break  # Salir del bucle si la conexión es exitosa
         except Exception as e:
-            logger.warning(f"Database connection failed (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {retry_delay}s...")
+            logger.warning(f"Database connection failed (attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s...")
+            logger.debug(f"Error details: {e}")
             if attempt + 1 == max_retries:
                 logger.error("Could not connect to the database after multiple retries. The application might not work correctly.")
-                # En un escenario más estricto, podríamos salir: sys.exit(1)
             time.sleep(retry_delay)
 
     yield
