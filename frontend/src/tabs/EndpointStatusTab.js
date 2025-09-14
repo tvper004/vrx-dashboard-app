@@ -1,51 +1,70 @@
-// Contenido del componente para la pestaña de Resumen (la vista original)
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, message, Spin } from 'antd';
-import { DesktopOutlined, SecurityScanOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Row, Col, Card, Table, Spin, Alert, Typography } from 'antd';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
-import OverviewChart from '../components/OverviewChart';
 
-const OverviewTab = ({ apiBaseUrl }) => {
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState(null);
+const { Title } = Typography;
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#844d8f'];
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`${apiBaseUrl}/dashboard/overview`);
-        setData(response.data);
-      } catch (error) {
-        message.error('Error cargando datos del resumen');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [apiBaseUrl]);
+const EndpointStatusTab = ({ apiBaseUrl }) => {
+    const [data, setData] = useState({ status_chart: [], endpoint_table: [] });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-  if (loading) {
-    return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
-  }
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                const response = await axios.get(`${apiBaseUrl}/dashboard/endpoint-status`);
+                setData(response.data);
+                setError(null);
+            } catch (err) {
+                setError('No se pudieron cargar los datos de estado de endpoints.');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [apiBaseUrl]);
 
-  if (!data) {
-    return <div style={{ textAlign: 'center', padding: '50px' }}>No hay datos para mostrar.</div>;
-  }
+    const columns = [
+        { title: 'Hostname', dataIndex: 'hostname', key: 'hostname', fixed: 'left', width: 200 },
+        { title: 'Status', dataIndex: 'status', key: 'status' },
+        { title: 'Sub Status', dataIndex: 'sub_status', key: 'sub_status' },
+        { title: 'Críticas', dataIndex: 'critical', key: 'critical' },
+        { title: 'Altas', dataIndex: 'high', key: 'high' },
+        { title: 'Bajas', dataIndex: 'low', key: 'low' },
+    ];
 
-  return (
-    <div>
-      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-        <Col xs={24} sm={12} md={6}><Card><Statistic title="Total Endpoints" value={data.total_endpoints} prefix={<DesktopOutlined />} /></Card></Col>
-        <Col xs={24} sm={12} md={6}><Card><Statistic title="Total Vulnerabilidades" value={data.total_vulnerabilities} prefix={<SecurityScanOutlined />} /></Card></Col>
-        <Col xs={24} sm={12} md={6}><Card><Statistic title="Tareas Completadas" value={data.tasks_by_status?.Succeeded || 0} prefix={<CheckCircleOutlined />} /></Card></Col>
-        <Col xs={24} sm={12} md={6}><Card><Statistic title="Última Actualización" value={data.last_update ? new Date(data.last_update).toLocaleDateString() : 'N/A'} prefix={<ClockCircleOutlined />} /></Card></Col>
-      </Row>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}><Card title="Vulnerabilidades por Severidad"><OverviewChart data={data.vulnerabilities_by_severity} type="pie" /></Card></Col>
-        <Col xs={24} lg={12}><Card title="Endpoints por Sistema Operativo"><OverviewChart data={data.endpoints_by_os} type="bar" /></Card></Col>
-      </Row>
-    </div>
-  );
+    if (loading) return <Spin tip="Cargando..." />;
+    if (error) return <Alert message="Error" description={error} type="error" showIcon />;
+
+    return (
+        <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+                <Card title={<Title level={4}>Endpoints por Estado</Title>}>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                            <Pie data={data.status_chart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} fill="#8884d8" label>
+                                {data.status_chart.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </Card>
+            </Col>
+            <Col xs={24} md={16}>
+                <Card title={<Title level={4}>Detalle de Endpoints</Title>}>
+                    <Table columns={columns} dataSource={data.endpoint_table} rowKey="hostname" pagination={{ pageSize: 10 }} scroll={{ x: 800 }} />
+                </Card>
+            </Col>
+        </Row>
+    );
 };
 
-export default OverviewTab;
+export default EndpointStatusTab;
+
