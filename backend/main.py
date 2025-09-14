@@ -512,6 +512,9 @@ async def clear_database():
 # Función para ejecutar la extracción de datos
 async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type: str):
     """Ejecutar extracción de datos usando el script Python existente"""
+    # Timeout de seguridad para el script (1 hora)
+    SCRIPT_TIMEOUT = 3600
+
     try:
         # Registrar inicio de extracción
         with engine.connect() as conn:
@@ -535,16 +538,24 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             "--allreports" if extraction_type == "all" else f"--{extraction_type}report"
         ]
         
-        logger.info(f"Ejecutando comando: {' '.join(cmd)}")
+        logger.info(f"Ejecutando comando: {' '.join(cmd)} con un timeout de {SCRIPT_TIMEOUT} segundos.")
         
         # Ejecutar el comando
         process = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            cwd="/app/vRx-Report"
+            cwd="/app/vRx-Report",
+            timeout=SCRIPT_TIMEOUT
         )
         
+        # Loguear la salida del script para diagnóstico
+        if process.stdout:
+            logger.info(f"Salida del script (stdout):\n{process.stdout}")
+        if process.stderr:
+            # Loguear stderr como warning incluso si el proceso tiene éxito, ya que puede contener información útil
+            logger.warning(f"Salida de errores del script (stderr):\n{process.stderr}")
+
         if process.returncode == 0:
             # Procesar archivos CSV y cargar en base de datos
             await process_csv_files()
@@ -584,6 +595,21 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             
             logger.error(f"Error en extracción: {process.stderr}")
             
+    except subprocess.TimeoutExpired as e:
+        error_message = f"La extracción excedió el tiempo límite de {SCRIPT_TIMEOUT} segundos. Esto puede deberse a un gran volumen de datos o a un problema con la API de Vicarius. Revisa los logs para más detalles."
+        logger.error(error_message)
+        if e.stdout:
+            logger.info(f"Salida del script antes del timeout (stdout):\n{e.stdout}")
+        if e.stderr:
+            logger.error(f"Errores del script antes del timeout (stderr):\n{e.stderr}")
+        
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE extraction_logs SET status = :status, error_message = :error_message, completed_at = :completed_at
+                WHERE status = 'running' ORDER BY created_at DESC LIMIT 1
+            """), {"status": "failed", "error_message": error_message, "completed_at": datetime.now()})
+            conn.commit()
+
     except Exception as e:
         logger.error(f"Error ejecutando extracción: {e}")
         
