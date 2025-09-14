@@ -589,8 +589,16 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             if not line_bytes:
                 break
             line = line_bytes.decode('utf-8', errors='ignore').strip()
-            logger.info(f"[Script Salida] {line}")
-            extraction_streams[extraction_id].append(line)
+            
+            # Enmascarar información sensible antes de enviarla al stream
+            masked_line = line
+            if line.strip().startswith("API Key:"):
+                masked_line = "API Key: ****"
+            if line.strip().startswith("Dashboard URL:"):
+                masked_line = "Dashboard URL: ****"
+            
+            logger.info(f"[Script Salida] {masked_line}")
+            extraction_streams[extraction_id].append(masked_line)
 
         await process.wait()
 
@@ -770,6 +778,7 @@ async def load_vulnerabilities_csv(file_path: str):
     ]
     timestamp_cols = ['patchReleaseDate', 'createAt', 'updateAt']
     column_mapping = {
+        'assethash': 'asset_hash',
         'group': 'group_name',
         'productName': 'product_name',
         'productRawEntryName': 'product_raw_entry_name',
