@@ -621,11 +621,13 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             # Registrar éxito
             with engine.connect() as conn:
                 conn.execute(text("""
-                    UPDATE extraction_logs 
+                    UPDATE extraction_logs
                     SET status = :status, completed_at = :completed_at
-                    WHERE extraction_type = :extraction_type 
-                    AND status = 'running'
-                    ORDER BY created_at DESC LIMIT 1
+                    WHERE id = (
+                        SELECT id FROM extraction_logs
+                        WHERE extraction_type = :extraction_type AND status = 'running'
+                        ORDER BY created_at DESC LIMIT 1
+                    )
                 """), {
                     "status": "completed",
                     "completed_at": datetime.now(),
@@ -640,11 +642,13 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             # Registrar error
             with engine.connect() as conn:
                 conn.execute(text("""
-                    UPDATE extraction_logs 
+                    UPDATE extraction_logs
                     SET status = :status, error_message = :error_message, completed_at = :completed_at
-                    WHERE extraction_type = :extraction_type 
-                    AND status = 'running'
-                    ORDER BY created_at DESC LIMIT 1
+                    WHERE id = (
+                        SELECT id FROM extraction_logs
+                        WHERE extraction_type = :extraction_type AND status = 'running'
+                        ORDER BY created_at DESC LIMIT 1
+                    )
                 """), {
                     "status": "failed",
                     "error_message": error_message,
@@ -662,8 +666,12 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
         extraction_streams[extraction_id].append(f"__ERROR__:{error_message}")
         with engine.connect() as conn:
             conn.execute(text("""
-                UPDATE extraction_logs SET status = :status, error_message = :error_message, completed_at = :completed_at
-                WHERE status = 'running' ORDER BY created_at DESC LIMIT 1
+                UPDATE extraction_logs 
+                SET status = :status, error_message = :error_message, completed_at = :completed_at
+                WHERE id = (
+                    SELECT id FROM extraction_logs
+                    WHERE status = 'running' ORDER BY created_at DESC LIMIT 1
+                )
             """), {"status": "failed", "error_message": error_message, "completed_at": datetime.now()})
             conn.commit()
 
@@ -674,11 +682,13 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
         extraction_streams[extraction_id].append(f"__ERROR__:Error inesperado en el servidor: {str(e)}")
         with engine.connect() as conn:
             conn.execute(text("""
-                UPDATE extraction_logs 
+                UPDATE extraction_logs
                 SET status = :status, error_message = :error_message, completed_at = :completed_at
-                WHERE extraction_type = :extraction_type 
-                AND status = 'running'
-                ORDER BY created_at DESC LIMIT 1
+                WHERE id = (
+                    SELECT id FROM extraction_logs
+                    WHERE extraction_type = :extraction_type AND status = 'running'
+                    ORDER BY created_at DESC LIMIT 1
+                )
             """), {
                 "status": "failed",
                 "error_message": str(e),
