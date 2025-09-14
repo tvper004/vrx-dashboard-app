@@ -13,6 +13,7 @@ import os
 import subprocess
 import logging
 from datetime import datetime
+import time
 from typing import List, Optional, Dict, Any
 import asyncio
 from contextlib import asynccontextmanager 
@@ -27,9 +28,9 @@ logger = logging.getLogger(__name__)
 # Configuración de base de datos
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    logger.error("FATAL: La variable de entorno DATABASE_URL no está configurada.")
-    # En un entorno real, podrías querer que esto lance una excepción para detener el inicio.
-    # Por ahora, el log de error será nuestra advertencia principal.
+    logger.error("FATAL: La variable de entorno DATABASE_URL no está configurada. La aplicación no puede iniciar.")
+    import sys
+    sys.exit(1)
 
 # Crear engine de SQLAlchemy
 engine = create_engine(DATABASE_URL)
@@ -41,14 +42,22 @@ Base = declarative_base()
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting vRx Dashboard API...")
-    # Verificar conexión a base de datos
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        logger.info("Database connection successful")
-    except Exception as e:
-        logger.error(f"Database connection failed: {e}")
-    
+    # Reintentar conexión a la base de datos para manejar condiciones de carrera en el arranque
+    max_retries = 10
+    retry_delay = 5  # segundos
+    for attempt in range(max_retries):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("Database connection successful.")
+            break  # Salir del bucle si la conexión es exitosa
+        except Exception as e:
+            logger.warning(f"Database connection failed (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {retry_delay}s...")
+            if attempt + 1 == max_retries:
+                logger.error("Could not connect to the database after multiple retries. The application might not work correctly.")
+                # En un escenario más estricto, podríamos salir: sys.exit(1)
+            time.sleep(retry_delay)
+
     yield
     
     # Shutdown
