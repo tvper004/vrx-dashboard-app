@@ -1,0 +1,14 @@
+# Variables de entorno para Easypanel
+# Copia estas variables en la configuración de Easypanel
+
+# Base de datos
+POSTGRES_PASSWORD=tu_password_seguro_aqui
+
+# Aplicación
+FRONTEND_URL=https://tu-dominio.easypanel.host
+LOG_LEVEL=INFO
+CORS_ORIGINS=https://tu-dominio.easypanel.host
+
+# Opcional: Para desarrollo
+# LOG_LEVEL=DEBUG
+# CORS_ORIGINS=http://localhost:3000,https://tu-dominio.easypanel.host

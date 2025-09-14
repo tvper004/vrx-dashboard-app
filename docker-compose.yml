@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: vrx-postgres
+    environment:
+      POSTGRES_DB: vrx_dashboard
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - vrx-network
+    restart: unless-stopped
+
+  # Aplicación principal
+  app:
+    build: .
+    container_name: vrx-dashboard-app
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/vrx_dashboard
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    volumes:
+      - ./vRx-Report-Unicon:/app/vRx-Report-Unicon
+      - ./backend:/app
+    networks:
+      - vrx-network
+    restart: unless-stopped
+
+  # Nginx para servir archivos estáticos (opcional)
+  nginx:
+    image: nginx:alpine
+    container_name: vrx-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - app
+    networks:
+      - vrx-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  vrx-network:
+    driver: bridge

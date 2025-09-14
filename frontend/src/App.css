@@ -1,0 +1,128 @@
+.App {
+  text-align: center;
+}
+
+.menu-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  transition: all 0.3s;
+  color: #666;
+}
+
+.menu-item:hover {
+  background-color: #f5f5f5;
+  color: #1890ff;
+}
+
+.menu-item.active {
+  background-color: #e6f7ff;
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.menu-item .anticon {
+  margin-right: 8px;
+}
+
+.dashboard-card {
+  margin-bottom: 16px;
+}
+
+.chart-container {
+  height: 300px;
+  padding: 16px;
+}
+
+.table-container {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-running {
+  color: #1890ff;
+}
+
+.status-completed {
+  color: #52c41a;
+}
+
+.status-failed {
+  color: #ff4d4f;
+}
+
+.filter-section {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.filter-section .ant-form-item {
+  margin-bottom: 0;
+}
+
+.extraction-modal .ant-modal-body {
+  padding: 24px;
+}
+
+.extraction-modal .ant-form-item-label {
+  font-weight: 500;
+}
+
+.overview-stats {
+  margin-bottom: 24px;
+}
+
+.overview-stats .ant-card {
+  text-align: center;
+}
+
+.overview-stats .ant-statistic-title {
+  color: #666;
+  font-size: 14px;
+}
+
+.overview-stats .ant-statistic-content {
+  color: #262626;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.chart-card {
+  height: 400px;
+}
+
+.chart-card .ant-card-body {
+  height: calc(100% - 57px);
+  padding: 16px;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+.error-alert {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+  .overview-stats .ant-col {
+    margin-bottom: 16px;
+  }
+  
+  .chart-card {
+    height: 300px;
+  }
+}

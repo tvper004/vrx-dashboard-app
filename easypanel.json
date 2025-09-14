@@ -1,0 +1,54 @@
+{
+  "name": "vrx-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard interactivo para datos de Vicarius vRx",
+  "main": "backend/main.py",
+  "scripts": {
+    "start": "python backend/main.py",
+    "dev": "python backend/main.py",
+    "build": "cd frontend && npm run build",
+    "install-deps": "pip install -r backend/requirements.txt && cd frontend && npm install"
+  },
+  "keywords": [
+    "vicarius",
+    "dashboard",
+    "security",
+    "vulnerabilities",
+    "endpoints"
+  ],
+  "author": "vRx Dashboard Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "python": ">=3.11.0"
+  },
+  "easypanel": {
+    "type": "application",
+    "framework": "fastapi",
+    "database": "postgresql",
+    "ports": [
+      {
+        "port": 8000,
+        "protocol": "http"
+      }
+    ],
+    "environment": {
+      "DATABASE_URL": "postgresql://postgres:password@postgres:5432/vrx_dashboard",
+      "API_HOST": "0.0.0.0",
+      "API_PORT": "8000",
+      "LOG_LEVEL": "INFO"
+    },
+    "volumes": [
+      {
+        "name": "reports",
+        "path": "/app/vRx-Report-Unicon/reports"
+      }
+    ],
+    "healthcheck": {
+      "path": "/health",
+      "interval": 30,
+      "timeout": 10,
+      "retries": 3
+    }
+  }
+}
