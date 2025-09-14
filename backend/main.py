@@ -2,6 +2,7 @@
 # FastAPI application for Vicarius data extraction and dashboard
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -64,6 +65,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Montar archivos estáticos del frontend
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Dependency para obtener sesión de base de datos
 def get_db():
