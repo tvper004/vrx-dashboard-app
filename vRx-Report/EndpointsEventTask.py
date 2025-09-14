@@ -41,102 +41,105 @@ def getTasksEndopintsEvents(apikey,urldashboard,fr0m,siz3,maxdate,mindate):
     parsed = json.loads(response.text)
 
     strTasks = ""
+    lastdate = 0
 
-    for i in parsed['serverResponseObject']:
-        try:
-            automationName = i['taskEndpointsEventTask']['taskAutomation']['automationName']
-            automationId = i['taskEndpointsEventTask']['taskAutomation']['automationId']
-        except:
-            automationName = ""
-            automationId = ""
-
-        
-        taskid = i['taskEndpointsEventTask']['taskId']
-        asset = i['taskEndpointsEventEndpoint']['endpointName']
-        
-        try:
-            username = i['taskEndpointsEventTask']['taskUser']['userFirstName']
-            username = username + " " + i['taskEndpointsEventTask']['taskUser']['userLastName']
-        except:
-            username=""
-        
-        try:
-            taskType = i['taskEndpointsEventTask']['taskTaskType']['taskTypeName']
-        except:
-            taskType = ""
-
-        try:
-            publisherName = i['taskEndpointsEventTask']['taskPublisher']['publisherName']
-        except:
-            publisherName = ""
-
-        pathproduct = ""
-        pathproductdesc = ""
-
-        if 'taskPatch' in i['taskEndpointsEventTask']:
-            if 'patchName' in i['taskEndpointsEventTask']['taskPatch']:            
-                pathproduct = i['taskEndpointsEventTask']['taskPatch']['patchName']
+    if 'serverResponseObject' in parsed and parsed['serverResponseObject']:
+        for i in parsed['serverResponseObject']:
+            try:
                 try:
-                    pathproductdesc = i['taskEndpointsEventTask']['taskPatch']['patchDescription']
-                except KeyError:
-                    pathproductdesc = ""
-        else:
-            pathproduct = ""
-            pathproductdesc = ""
+                    automationName = i['taskEndpointsEventTask']['taskAutomation']['automationName']
+                    automationId = i['taskEndpointsEventTask']['taskAutomation']['automationId']
+                except:
+                    automationName = ""
+                    automationId = ""
 
-
-        if 'taskProduct' in i['taskEndpointsEventTask']:
-            if 'productName' in i['taskEndpointsEventTask']['taskProduct']:
+                
+                taskid = i['taskEndpointsEventTask']['taskId']
+                asset = i['taskEndpointsEventEndpoint']['endpointName']
+                
                 try:
-                    pathproduct = i['taskEndpointsEventTask']['taskProduct']['productName']
-                except KeyError:
+                    username = i['taskEndpointsEventTask']['taskUser']['userFirstName']
+                    username = username + " " + i['taskEndpointsEventTask']['taskUser']['userLastName']
+                except:
+                    username=""
+                
+                try:
+                    taskType = i['taskEndpointsEventTask']['taskTaskType']['taskTypeName']
+                except:
+                    taskType = ""
+
+                try:
+                    publisherName = i['taskEndpointsEventTask']['taskPublisher']['publisherName']
+                except:
+                    publisherName = ""
+
+                pathproduct = ""
+                pathproductdesc = ""
+
+                if 'taskPatch' in i['taskEndpointsEventTask']:
+                    if 'patchName' in i['taskEndpointsEventTask']['taskPatch']:            
+                        pathproduct = i['taskEndpointsEventTask']['taskPatch']['patchName']
+                        try:
+                            pathproductdesc = i['taskEndpointsEventTask']['taskPatch']['patchDescription']
+                        except KeyError:
+                            pathproductdesc = ""
+                else:
                     pathproduct = ""
-        else:
-            pathproduct = ""
+                    pathproductdesc = ""
 
 
-        if 'ApplyPublisherOperatingSystemVersionsPatchs' in taskType:
-            pathproduct = i['taskEndpointsEventTask']['taskOperatingSystem']['operatingSystemName']
-        
-        if 'ActivateTopia' in (i['taskEndpointsEventTask']['taskTaskType']['taskTypeName']):
-            actionStatus = taskType
-            messageStatus = ""
-        
+                if 'taskProduct' in i['taskEndpointsEventTask']:
+                    if 'productName' in i['taskEndpointsEventTask']['taskProduct']:
+                        try:
+                            pathproduct = i['taskEndpointsEventTask']['taskProduct']['productName']
+                        except KeyError:
+                            pathproduct = ""
+                else:
+                    pathproduct = ""
 
-        else:
-            try:
-                actionStatus = i['taskEndpointsEventOrganizationEndpointPatchPatchPackages']['organizationEndpointPatchPatchPackagesActionStatus']['actionStatusName']
-                messageStatus = i['taskEndpointsEventOrganizationEndpointPatchPatchPackages']['organizationEndpointPatchPatchPackagesStatusMessage']
-            except:
-                actionStatus = ""
-                messageStatus = ""
-        
-        if 'RunScript' in (i['taskEndpointsEventTask']['taskTaskType']['taskTypeName']):
-            # set actionstatus to taskTaskStatus taskStatusName
-            try:
-                messageStatus = i['taskEndpointsEventOrganizationEndpointTaskScriptTemplateCommandAbs']['organizationEndpointTaskOrganizationScriptTemplatesOutput'] 
-            except:
-                messageStatus = ''
-            actionStatus = i['taskEndpointsEventTask']['taskTaskStatus']['taskStatusName']
-            try:
-                pathproductdesc = i['taskEndpointsEventTask']['taskScriptTemplate']['organizationScriptTemplateName']
-            except:
-                pathproductdesc = ''
-            
-            
-        createAt = i['analyticsEventCreatedAt']
-        updateAt = i['analyticsEventUpdatedAt']
 
-        pathproductdesc = pathproductdesc.replace("\r","").replace("\n",">>")
-        pathproductdesc = pathproductdesc.replace('"',"").strip('\n')
+                if 'ApplyPublisherOperatingSystemVersionsPatchs' in taskType:
+                    pathproduct = i['taskEndpointsEventTask']['taskOperatingSystem']['operatingSystemName']
+                
+                if 'ActivateTopia' in (i['taskEndpointsEventTask']['taskTaskType']['taskTypeName']):
+                    actionStatus = taskType
+                    messageStatus = ""
+                
 
-        messageStatus = messageStatus.replace("\r","").replace("\n",">>")
-        messageStatus = messageStatus.replace('"',"").strip('\n')
-        
-        try:
-            strTasks += (str(taskid) + "," + str(automationId) + "," + automationName + "," + asset + "," + taskType + "," + publisherName + "," + pathproduct + ",\"" + pathproductdesc + "\"," + actionStatus + ",\"" + messageStatus + "\"," + username + "," + str(createAt) + "," + str(updateAt) + "\n")
-            lastdate = i['analyticsEventCreatedAt']
-        except:
-            strTasks,lastdate = "", 0
+                else:
+                    try:
+                        actionStatus = i['taskEndpointsEventOrganizationEndpointPatchPatchPackages']['organizationEndpointPatchPatchPackagesActionStatus']['actionStatusName']
+                        messageStatus = i['taskEndpointsEventOrganizationEndpointPatchPatchPackages']['organizationEndpointPatchPatchPackagesStatusMessage']
+                    except:
+                        actionStatus = ""
+                        messageStatus = ""
+                
+                if 'RunScript' in (i['taskEndpointsEventTask']['taskTaskType']['taskTypeName']):
+                    # set actionstatus to taskTaskStatus taskStatusName
+                    try:
+                        messageStatus = i['taskEndpointsEventOrganizationEndpointTaskScriptTemplateCommandAbs']['organizationEndpointTaskOrganizationScriptTemplatesOutput'] 
+                    except:
+                        messageStatus = ''
+                    actionStatus = i['taskEndpointsEventTask']['taskTaskStatus']['taskStatusName']
+                    try:
+                        pathproductdesc = i['taskEndpointsEventTask']['taskScriptTemplate']['organizationScriptTemplateName']
+                    except:
+                        pathproductdesc = ''
+                    
+                    
+                createAt = i['analyticsEventCreatedAt']
+                updateAt = i['analyticsEventUpdatedAt']
+
+                pathproductdesc = pathproductdesc.replace("\r","").replace("\n",">>")
+                pathproductdesc = pathproductdesc.replace('"',"").strip('\n')
+
+                messageStatus = messageStatus.replace("\r","").replace("\n",">>")
+                messageStatus = messageStatus.replace('"',"").strip('\n')
+                
+                strTasks += (str(taskid) + "," + str(automationId) + "," + automationName + "," + asset + "," + taskType + "," + publisherName + "," + pathproduct + ",\"" + pathproductdesc + "\"," + actionStatus + ",\"" + messageStatus + "\"," + username + "," + str(createAt) + "," + str(updateAt) + "\n")
+                lastdate = i['analyticsEventCreatedAt']
+            except Exception as e:
+                print(f"Could not parse task event record. Error: {e}. Record: {i}")
+                continue
 
     return strTasks,lastdate
