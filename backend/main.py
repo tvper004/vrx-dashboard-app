@@ -4,14 +4,14 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
 import pandas as pd
 import os
 import subprocess
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 import asyncio
 from contextlib import asynccontextmanager
@@ -73,17 +73,11 @@ def get_db():
     finally:
         db.close()
 
-# Modelos de datos (simplificados para la API)
-class ExtractionConfig:
-    def __init__(self, api_key: str, dashboard_url: str):
-        self.api_key = api_key
-        self.dashboard_url = dashboard_url
-
-class ExtractionRequest:
-    def __init__(self, api_key: str, dashboard_url: str, extraction_type: str = "all"):
-        self.api_key = api_key
-        self.dashboard_url = dashboard_url
-        self.extraction_type = extraction_type
+# Modelo de datos para la petición de extracción
+class ExtractionRequest(BaseModel):
+    api_key: str
+    dashboard_url: str
+    extraction_type: str = "all"
 
 # Rutas de la API
 
