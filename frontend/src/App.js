@@ -14,7 +14,8 @@ import {
   MinusOutlined,
   ExpandOutlined,
   UnorderedListOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  CloudUploadOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 import jsPDF from 'jspdf';
@@ -87,12 +88,10 @@ function App() {
         eventSource.onmessage = (event) => {
           const data = event.data;
           if (data.startsWith('__END__')) {
-            setLogContent(prev => prev + '\n\n✅ Proceso completado exitosamente. La página se recargará para mostrar los datos actualizados.\n');
+            setLogContent(prev => prev + '\n\n✅ Proceso completado exitosamente. Ahora puedes recargar los datos o cerrar esta ventana.\n');
             setIsExtractionFinished(true);
             reconnectionAttempts = 0;
             eventSource.close();
-            // Recargar la página para mostrar los nuevos datos
-            setTimeout(() => window.location.reload(), 2000);
           } else if (data.startsWith('__ERROR__:')) {
             const errorMsg = data.replace('__ERROR__:', '');
             setLogContent(prev => prev + `\n\n❌ ERROR: ${errorMsg}\n`);
@@ -166,6 +165,17 @@ function App() {
       console.error('Error clearing database:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForceCsvLoad = async () => {
+    try {
+      message.info('Iniciando carga forzada de archivos CSV en el servidor...');
+      await axios.post(`${API_BASE_URL}/database/load-csvs`);
+      message.success('Proceso de carga de CSVs iniciado en segundo plano. Los datos deberían aparecer en breve.');
+    } catch (error) {
+      message.error('Error al iniciar la carga forzada de CSVs.');
+      console.error('Error forcing CSV load:', error);
     }
   };
 
@@ -308,10 +318,28 @@ function App() {
                 <Button key="minimize" icon={<MinusOutlined />} onClick={() => setIsLogModalMinimized(true)}>
                   Minimizar
                 </Button>,
+                <Button 
+                  key="loadcsv" 
+                  icon={<CloudUploadOutlined />} 
+                  onClick={handleForceCsvLoad} 
+                  disabled={!isExtractionFinished}
+                  title="Forzar la carga de los CSV generados al a base de datos."
+                >
+                  Cargar CSVs Manualmente
+                </Button>,
+                <Button 
+                  key="reload"
+                  type="primary"
+                  icon={<SyncOutlined />} 
+                  onClick={() => window.location.reload()} 
+                  disabled={!isExtractionFinished}
+                >
+                  Recargar Datos
+                </Button>,
                 <Button key="close" onClick={() => {
                   setLogModalVisible(false);
                   setIsLogModalMinimized(false); // Reset on close
-                }} disabled={!isExtractionFinished}>
+                }}>
                   Cerrar
                 </Button>,
               ]
