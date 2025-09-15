@@ -134,7 +134,7 @@ async def get_endpoint_status():
     try:
         with engine.connect() as conn:
             status_result = conn.execute(text("SELECT operating_system, COUNT(*) as count FROM endpoints GROUP BY operating_system")).fetchall()
-            table_result = conn.execute(text("
+            table_result = conn.execute(text("""
                 SELECT 
                     e.hostname, e.operating_system,
                     COUNT(v.id) as total_vulnerabilities,
@@ -144,7 +144,7 @@ async def get_endpoint_status():
                 FROM endpoints e
                 LEFT JOIN vulnerabilities v ON e.hostname = v.asset
                 GROUP BY e.hostname, e.operating_system ORDER BY e.hostname
-            ")).fetchall()
+            """)).fetchall()
 
             return {
                 "status_chart": [{"name": row.operating_system or 'N/A', "value": row.count} for row in status_result],
