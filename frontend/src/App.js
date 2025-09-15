@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Card, Row, Col, Statistic, Button, Modal, Form, Input, message, Spin, Tabs, Dropdown, Menu } from 'antd';
+import { Layout, Button, Modal, Form, Input, message, Spin, Tabs, Dropdown } from 'antd';
 import { 
   DashboardOutlined, 
   SecurityScanOutlined, 
@@ -15,7 +15,8 @@ import {
   ExpandOutlined,
   UnorderedListOutlined,
   DeleteOutlined,
-  CloudUploadOutlined
+  CloudUploadOutlined,
+  CloudDownloadOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 import jsPDF from 'jspdf';
@@ -128,13 +129,8 @@ function App() {
     message.info('Generando PDF...');
     const doc = new jsPDF('p', 'pt', 'a4');
     
-    // Lógica de exportación
-    // Esto requeriría capturar el contenido de cada pestaña como imagen o tabla
-    // y añadirlo al documento PDF.
-    // Ejemplo simple:
     doc.text("Reporte vRx Dashboard", 40, 40);
     doc.text(`Tipo de Reporte: ${type}`, 40, 60);
-    // ... añadir más contenido ...
     
     doc.save(`vRx-Report-${type}-${new Date().toISOString().split('T')[0]}.pdf`);
     message.success('PDF generado exitosamente');
@@ -159,7 +155,7 @@ function App() {
       setLoading(true);
       await axios.post(`${API_BASE_URL}/database/clear`);
       message.success('La base de datos ha sido limpiada exitosamente. La página se recargará.');
-      setTimeout(() => window.location.reload(), 1500); // Recargar para refrescar todo
+      setTimeout(() => window.location.reload(), 1500);
     } catch (error) {
       message.error('Error al limpiar la base de datos.');
       console.error('Error clearing database:', error);
@@ -172,7 +168,7 @@ function App() {
     try {
       message.info('Iniciando carga forzada de archivos CSV en el servidor...');
       await axios.post(`${API_BASE_URL}/database/load-csvs`);
-      message.success('Proceso de carga de CSVs iniciado en segundo plano. Los datos deberían aparecer en breve.');
+      message.success('Proceso de carga de CSVs iniciado en segundo plano. Recarga la página en unos momentos para ver los datos.');
     } catch (error) {
       message.error('Error al iniciar la carga forzada de CSVs.');
       console.error('Error forcing CSV load:', error);
@@ -206,10 +202,23 @@ function App() {
         <div className="header-actions">
           <Button 
             icon={<SyncOutlined />} 
+            onClick={() => window.location.reload()}
+          >
+            Recargar
+          </Button>
+          <Button 
+            icon={<CloudDownloadOutlined />} 
             onClick={handleExtractionButtonClick}
             loading={extractionStatus?.status === 'running'}
           >
             {extractionStatus?.status === 'running' ? 'Extrayendo...' : 'Extraer Datos'}
+          </Button>
+          <Button 
+            icon={<CloudUploadOutlined />} 
+            onClick={handleForceCsvLoad} 
+            title="Forzar la carga de los CSV generados a la base de datos."
+          >
+            Cargar CSVs
           </Button>
           <Dropdown menu={{ items: exportMenuItems, onClick: (e) => handleExport(e.key) }}>
             <Button>
@@ -244,7 +253,6 @@ function App() {
             <TabPane tab={<span><BarChartOutlined />Comparativo</span>} key="5">
               <RemediationComparisonTab apiBaseUrl={API_BASE_URL} />
             </TabPane>
-            {/* Pestañas de datos detallados añadidas */}
             <TabPane tab={<span><BugOutlined />Vulnerabilidades (Detalle)</span>} key="6">
               <VulnerabilitiesTable />
             </TabPane>
@@ -318,28 +326,10 @@ function App() {
                 <Button key="minimize" icon={<MinusOutlined />} onClick={() => setIsLogModalMinimized(true)}>
                   Minimizar
                 </Button>,
-                <Button 
-                  key="loadcsv" 
-                  icon={<CloudUploadOutlined />} 
-                  onClick={handleForceCsvLoad} 
-                  disabled={!isExtractionFinished}
-                  title="Forzar la carga de los CSV generados al a base de datos."
-                >
-                  Cargar CSVs Manualmente
-                </Button>,
-                <Button 
-                  key="reload"
-                  type="primary"
-                  icon={<SyncOutlined />} 
-                  onClick={() => window.location.reload()} 
-                  disabled={!isExtractionFinished}
-                >
-                  Recargar Datos
-                </Button>,
                 <Button key="close" onClick={() => {
                   setLogModalVisible(false);
                   setIsLogModalMinimized(false); // Reset on close
-                }}>
+                }} disabled={!isExtractionFinished}>
                   Cerrar
                 </Button>,
               ]
