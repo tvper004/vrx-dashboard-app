@@ -1,7 +1,7 @@
 # vRx Dashboard App - Backend API
 # FastAPI application for Vicarius data extraction and dashboard
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request, File, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -23,10 +23,14 @@ from psycopg2.extras import RealDictCursor
 import io
 import json
 import uuid
+import shutil
 
-# Configuración de logging
+# Configuração de logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# --- Directorios ---
+REPORTS_DIR = "/app/vRx-Report/reports"
 
 # Configuración de base de datos
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -48,6 +52,9 @@ extraction_streams: Dict[str, List[str]] = {}
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting vRx Dashboard API...")
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+    logger.info(f"Directorio de reportes asegurado en: {REPORTS_DIR}")
+    
     # Reintentar conexión a la base de datos para manejar condiciones de carrera
     max_retries = 10
     retry_delay = 5  # segundos
@@ -184,7 +191,7 @@ async def get_extraction_status():
                 SELECT * FROM extraction_logs 
                 ORDER BY created_at DESC 
                 LIMIT 1
-            """)).fetchone()
+            """,)).fetchone()
             
             if result:
                 return {
@@ -223,7 +230,7 @@ async def get_dashboard_overview():
                 SELECT sensitivity_level_name, COUNT(*) as count 
                 FROM vulnerabilities 
                 GROUP BY sensitivity_level_name
-            """)).fetchall()
+            """,)).fetchall()
             stats["vulnerabilities_by_severity"] = {row.sensitivity_level_name: row.count for row in result}
             
             # Endpoints por sistema operativo
@@ -231,7 +238,7 @@ async def get_dashboard_overview():
                 SELECT operating_system, COUNT(*) as count 
                 FROM endpoints 
                 GROUP BY operating_system
-            """)).fetchall()
+            """,)).fetchall()
             stats["endpoints_by_os"] = {row.operating_system: row.count for row in result}
             
             # Tareas por estado
@@ -239,14 +246,14 @@ async def get_dashboard_overview():
                 SELECT action_status, COUNT(*) as count 
                 FROM endpoint_event_tasks 
                 GROUP BY action_status
-            """)).fetchall()
+            """,)).fetchall()
             stats["tasks_by_status"] = {row.action_status: row.count for row in result}
             
             # Última actualización
             result = conn.execute(text("""
                 SELECT MAX(updated_at) as last_update 
                 FROM endpoints
-            """)).fetchone()
+            """,)).fetchone()
             stats["last_update"] = result.last_update.isoformat() if result and result.last_update else None
             
             return stats
@@ -516,6 +523,43 @@ async def clear_database():
         logger.error(f"Error limpiando la base de datos: {e}")
         raise HTTPException(status_code=500, detail=f"Error limpiando la base de datos: {str(e)}")
 
+@app.post("/database/upload-csvs")
+async def upload_csvs(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...) ):
+    """
+    Permite subir archivos CSV al servidor y luego los procesa para cargarlos en la base de datos.
+    """
+    try:
+        logger.info(f"Recibidos {len(files)} archivos para subir.")
+        
+        saved_files = []
+        for file in files:
+            # Validar tipo de archivo
+            if not file.filename.endswith('.csv'):
+                logger.warning(f"Archivo omitido: {file.filename} no es un archivo CSV.")
+                continue
+            
+            dest_path = os.path.join(REPORTS_DIR, file.filename)
+            
+            # Guardar el archivo en el disco
+            with open(dest_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            
+            saved_files.append(file.filename)
+            logger.info(f"Archivo '{file.filename}' guardado en '{dest_path}'")
+
+        if not saved_files:
+            raise HTTPException(status_code=400, detail="No se subieron archivos CSV válidos.")
+
+        # Iniciar el procesamiento de los archivos CSV en segundo plano
+        background_tasks.add_task(process_csv_files)
+        
+        return {
+            "message": f"Archivos CSV subidos exitosamente: {', '.join(saved_files)}. El procesamiento ha comenzado en segundo plano."
+        }
+    except Exception as e:
+        logger.error(f"Error subiendo archivos CSV: {e}")
+        raise HTTPException(status_code=500, detail=f"Error subiendo archivos: {str(e)}")
+
 @app.post("/database/load-csvs")
 async def force_load_csvs(background_tasks: BackgroundTasks):
     """
@@ -581,7 +625,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             conn.execute(text("""
                 INSERT INTO extraction_logs (extraction_type, status, started_at)
                 VALUES (:extraction_type, :status, :started_at)
-            """), {
+            """,), {
                 "extraction_type": extraction_type,
                 "status": "running",
                 "started_at": datetime.now()
@@ -642,7 +686,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                         WHERE extraction_type = :extraction_type AND status = 'running'
                         ORDER BY created_at DESC LIMIT 1
                     )
-                """), {
+                """,), {
                     "status": "completed",
                     "completed_at": datetime.now(),
                     "extraction_type": extraction_type
@@ -663,7 +707,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                         WHERE extraction_type = :extraction_type AND status = 'running'
                         ORDER BY created_at DESC LIMIT 1
                     )
-                """), {
+                """,), {
                     "status": "failed",
                     "error_message": error_message,
                     "completed_at": datetime.now(),
@@ -686,7 +730,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                     SELECT id FROM extraction_logs
                     WHERE status = 'running' ORDER BY created_at DESC LIMIT 1
                 )
-            """), {"status": "failed", "error_message": error_message, "completed_at": datetime.now()})
+            """,), {"status": "failed", "error_message": error_message, "completed_at": datetime.now()})
             conn.commit()
 
     except Exception as e:
@@ -703,7 +747,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                     WHERE extraction_type = :extraction_type AND status = 'running'
                     ORDER BY created_at DESC LIMIT 1
                 )
-            """), {
+            """,), {
                 "status": "failed",
                 "error_message": str(e),
                 "completed_at": datetime.now(),
@@ -714,25 +758,23 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
 async def process_csv_files():
     """Procesar archivos CSV y cargar datos en base de datos"""
     try:
-        reports_dir = "/app/vRx-Report/reports"
-        
         # Procesar endpoints
-        endpoints_file = os.path.join(reports_dir, "Endpoints.csv")
+        endpoints_file = os.path.join(REPORTS_DIR, "Endpoints.csv")
         if os.path.exists(endpoints_file):
             await load_endpoints_csv(endpoints_file)
         
         # Procesar vulnerabilidades
-        vulnerabilities_file = os.path.join(reports_dir, "VulnerabilitiesND.csv")
+        vulnerabilities_file = os.path.join(REPORTS_DIR, "VulnerabilitiesND.csv")
         if os.path.exists(vulnerabilities_file):
             await load_vulnerabilities_csv(vulnerabilities_file)
         
         # Procesar patches
-        patches_file = os.path.join(reports_dir, "EndpointPatchs.csv")
+        patches_file = os.path.join(REPORTS_DIR, "EndpointPatchs.csv")
         if os.path.exists(patches_file):
             await load_patches_csv(patches_file)
         
         # Procesar tareas
-        tasks_file = os.path.join(reports_dir, "EndpointsEventTask.csv")
+        tasks_file = os.path.join(REPORTS_DIR, "EndpointsEventTask.csv")
         if os.path.exists(tasks_file):
             await load_tasks_csv(tasks_file)
         
