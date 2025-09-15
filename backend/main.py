@@ -722,7 +722,7 @@ async def process_csv_files():
             await load_endpoints_csv(endpoints_file)
         
         # Procesar vulnerabilidades
-        vulnerabilities_file = os.path.join(reports_dir, "Vulnerabilities.csv")
+        vulnerabilities_file = os.path.join(reports_dir, "VulnerabilitiesND.csv")
         if os.path.exists(vulnerabilities_file):
             await load_vulnerabilities_csv(vulnerabilities_file)
         
