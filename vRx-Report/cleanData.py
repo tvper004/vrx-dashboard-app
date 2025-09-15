@@ -39,6 +39,18 @@ def cleanData():
     except Exception as e:
         print(f"An unexpected error occurred while cleaning EndpointIncidentesVulnerabilities.csv: {e}")
 
+    try:
+        # Limpiar EndpointsEventTask.csv
+        tasks_df = pd.read_csv('reports/EndpointsEventTask.csv')
+        # Eliminar duplicados basados en Taskid, manteniendo el más reciente (última aparición)
+        tasks_df.drop_duplicates(subset=['Taskid'], keep='last', inplace=True)
+        tasks_df.to_csv('reports/EndpointsEventTask.csv', index=False)
+        print("Cleaned EndpointsEventTask report generated.")
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        print("Warning: Could not clean EndpointsEventTask.csv. File not found or is empty.")
+    except Exception as e:
+        print(f"An unexpected error occurred while cleaning EndpointsEventTask.csv: {e}")
+
 
 def getLastIncidentEventVulnerabilities ():
     try :
