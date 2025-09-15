@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Button, Modal, Form, Input, message, Spin, Tabs, Dropdown, Upload } from 'antd';
+import { Layout, Button, Modal, Form, Input, message, Spin, Tabs, Dropdown, Upload, Table } from 'antd';
 import { 
   DashboardOutlined, 
   SecurityScanOutlined, 
@@ -16,7 +16,8 @@ import {
   DeleteOutlined,
   CloudUploadOutlined,
   CloudDownloadOutlined,
-  InboxOutlined
+  InboxOutlined,
+  DatabaseOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 import jsPDF from 'jspdf';
@@ -51,6 +52,11 @@ function App() {
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [fileList, setFileList] = useState([]);
   const [uploading, setUploading] = useState(false);
+
+  // State for server files modal
+  const [serverFilesModalVisible, setServerFilesModalVisible] = useState(false);
+  const [serverFiles, setServerFiles] = useState([]);
+  const [loadingServerFiles, setLoadingServerFiles] = useState(false);
 
   useEffect(() => {
     checkExtractionStatus();
@@ -151,6 +157,20 @@ function App() {
     }
   };
 
+  const handleShowServerFiles = async () => {
+    setLoadingServerFiles(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/database/list-reports`);
+      setServerFiles(response.data.files || []);
+      setServerFilesModalVisible(true);
+    } catch (error) {
+      message.error('Error al obtener la lista de archivos del servidor.');
+      console.error('Error fetching server files:', error);
+    } finally {
+      setLoadingServerFiles(false);
+    }
+  };
+
   const handleExport = (type) => {
     message.info('Generando PDF...');
     const doc = new jsPDF('p', 'pt', 'a4');
@@ -214,6 +234,24 @@ function App() {
     accept: '.csv',
   };
 
+  const serverFileColumns = [
+    { title: 'Nombre de Archivo', dataIndex: 'filename', key: 'filename', sorter: (a, b) => a.filename.localeCompare(b.filename) },
+    {
+      title: 'Tamaño',
+      dataIndex: 'size_bytes',
+      key: 'size_bytes',
+      sorter: (a, b) => a.size_bytes - b.size_bytes,
+      render: size => `${(size / 1024).toFixed(2)} KB`,
+    },
+    {
+      title: 'Última Modificación',
+      dataIndex: 'modified_at',
+      key: 'modified_at',
+      sorter: (a, b) => new Date(a.modified_at) - new Date(b.modified_at),
+      render: date => new Date(date).toLocaleString(),
+    },
+  ];
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Header className="dashboard-header">
@@ -238,6 +276,14 @@ function App() {
             title="Subir archivos CSV manualmente."
           >
             Subir CSVs
+          </Button>
+          <Button 
+            icon={<DatabaseOutlined />} 
+            onClick={handleShowServerFiles} 
+            loading={loadingServerFiles}
+            title="Ver los archivos CSV actualmente en el servidor."
+          >
+            Ver Archivos en Servidor
           </Button>
           <Dropdown menu={{ items: exportMenuItems, onClick: (e) => handleExport(e.key) }}>
             <Button>
@@ -330,6 +376,26 @@ function App() {
             Soporte para una o múltiples subidas. Solo se aceptarán archivos .csv.
           </p>
         </Dragger>
+      </Modal>
+
+      <Modal
+        title="Archivos CSV en el Servidor"
+        open={serverFilesModalVisible}
+        onCancel={() => setServerFilesModalVisible(false)}
+        footer={[
+          <Button key="ok" type="primary" onClick={() => setServerFilesModalVisible(false)}>
+            OK
+          </Button>,
+        ]}
+        width={800}
+      >
+        <Table
+          columns={serverFileColumns}
+          dataSource={serverFiles}
+          rowKey="filename"
+          loading={loadingServerFiles}
+          pagination={{ pageSize: 5 }}
+        />
       </Modal>
 
       <Modal
