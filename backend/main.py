@@ -96,6 +96,12 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def read_index():
     return FileResponse("static/index.html")
 
+# Modelo de datos para la petición de extracción
+class ExtractionRequest(BaseModel):
+    api_key: str
+    dashboard_url: str
+    extraction_type: str = "all"
+
 @app.post("/extract-data")
 async def extract_data(request: ExtractionRequest, background_tasks: BackgroundTasks):
     if not request.api_key or not request.dashboard_url:
