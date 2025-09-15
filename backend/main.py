@@ -516,6 +516,20 @@ async def clear_database():
         logger.error(f"Error limpiando la base de datos: {e}")
         raise HTTPException(status_code=500, detail=f"Error limpiando la base de datos: {str(e)}")
 
+@app.post("/database/load-csvs")
+async def force_load_csvs(background_tasks: BackgroundTasks):
+    """
+    Fuerza la carga de los archivos CSV existentes en la base de datos.
+    Útil si la extracción se completó pero la carga automática falló.
+    """
+    try:
+        logger.info("Iniciando carga forzada de archivos CSV...")
+        background_tasks.add_task(process_csv_files)
+        return {"message": "Proceso de carga de CSVs iniciado en segundo plano."}
+    except Exception as e:
+        logger.error(f"Error al iniciar la carga forzada de CSVs: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al iniciar la carga forzada: {str(e)}")
+
 @app.get("/stream-extraction-logs/{extraction_id}")
 async def stream_extraction_logs(extraction_id: str):
     """
