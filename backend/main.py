@@ -272,7 +272,7 @@ async def bulk_load_csv(file_path: str, table_name: str, columns: list, column_m
                 output = io.StringIO()
                 df.to_csv(output, sep='\t', header=False, index=False, na_rep='\\N')
                 output.seek(0)
-                cursor.copy_expert(f"COPY {table_name} ({','.join(db_columns)}) FROM STDIN WITH (FORMAT csv, DELIMITER E'\t', NULL '\N')", output)
+                cursor.copy_expert(f"COPY {table_name} ({','.join(db_columns)}) FROM STDIN WITH (FORMAT csv, DELIMITER E'\t', NULL '\\N')", output)
             conn.commit()
         logger.info(f"Cargados {len(df)} registros en la tabla '{table_name}' exitosamente.")
     except Exception as e:
