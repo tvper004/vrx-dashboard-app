@@ -12,6 +12,7 @@ import {
   DownOutlined,
   BugOutlined,
   MinusOutlined,
+  ExpandOutlined,
   UnorderedListOutlined,
   DeleteOutlined
 } from '@ant-design/icons';
@@ -41,6 +42,7 @@ function App() {
   const [activeTabKey, setActiveTabKey] = useState('1');
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logContent, setLogContent] = useState('');
+  const [isLogModalMinimized, setIsLogModalMinimized] = useState(false);
   const [isExtractionFinished, setIsExtractionFinished] = useState(false);
 
   // Cargar datos del dashboard al iniciar
@@ -78,6 +80,8 @@ function App() {
         setIsExtractionFinished(false);
         setLogModalVisible(true);
 
+        let reconnectionAttempts = 0;
+
         const eventSource = new EventSource(`${API_BASE_URL}/stream-extraction-logs/${extractionId}`);
         
         eventSource.onmessage = (event) => {
@@ -85,6 +89,7 @@ function App() {
           if (data.startsWith('__END__')) {
             setLogContent(prev => prev + '\n\n✅ Proceso completado exitosamente.\n');
             setIsExtractionFinished(true);
+            reconnectionAttempts = 0;
             eventSource.close();
           } else if (data.startsWith('__ERROR__:')) {
             const errorMsg = data.replace('__ERROR__:', '');
@@ -92,14 +97,23 @@ function App() {
             setIsExtractionFinished(true);
             eventSource.close();
           } else {
+            // Si recibimos un mensaje, la conexión es buena. Reiniciamos el contador.
+            if (reconnectionAttempts > 0) {
+              setLogContent(prev => prev + '✅ Conexión restablecida.\n');
+              reconnectionAttempts = 0;
+            }
             setLogContent(prev => prev + data + '\n');
           }
         };
 
         eventSource.onerror = () => {
-          setLogContent(prev => prev + '\n\n❌ Error de conexión con el stream de logs. El proceso puede continuar en segundo plano.\n');
-          setIsExtractionFinished(true);
-          eventSource.close();
+          reconnectionAttempts++;
+          if (reconnectionAttempts === 1) {
+            setLogContent(prev => prev + '\n\n⚠️ Conexión perdida. Intentando reconectar...\n');
+          } else if (reconnectionAttempts > 5) {
+            setLogContent(prev => prev + '\n\n❌ No se pudo restablecer la conexión. El proceso puede continuar en segundo plano. Puedes cerrar esta ventana y revisar el estado más tarde.\n');
+            eventSource.close();
+          }
         };
       }
       checkExtractionStatus(); // Check status immediately
@@ -270,16 +284,35 @@ function App() {
       <Modal
         title="Progreso de la Extracción"
         open={logModalVisible}
-        onCancel={() => setLogModalVisible(false)}
+        onCancel={() => {
+          setLogModalVisible(false);
+          setIsLogModalMinimized(false); // Reset on close
+        }}
         width={800}
-        footer={[
-          <Button key="minimize" icon={<MinusOutlined />} onClick={() => setLogModalVisible(false)}>
-            Minimizar
-          </Button>,
-          <Button key="close" onClick={() => setLogModalVisible(false)} disabled={!isExtractionFinished}>
-            Cerrar
-          </Button>
-        ]}
+        wrapClassName={isLogModalMinimized ? 'log-modal-minimized' : ''}
+        footer={
+          isLogModalMinimized
+            ? [
+                <Button
+                  key="maximize"
+                  icon={<ExpandOutlined />}
+                  onClick={() => setIsLogModalMinimized(false)}
+                >
+                  Maximizar
+                </Button>,
+              ]
+            : [
+                <Button key="minimize" icon={<MinusOutlined />} onClick={() => setIsLogModalMinimized(true)}>
+                  Minimizar
+                </Button>,
+                <Button key="close" onClick={() => {
+                  setLogModalVisible(false);
+                  setIsLogModalMinimized(false); // Reset on close
+                }} disabled={!isExtractionFinished}>
+                  Cerrar
+                </Button>,
+              ]
+        }
       >
         <div className="terminal-output">
           <pre>
