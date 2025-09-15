@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="vRx Dashboard API",
     description="API para dashboard interactivo con carga manual de CSV.",
-    version="1.2.0-manual",
+    version="1.3.0-manual",
     lifespan=lifespan
 )
 
@@ -120,7 +120,6 @@ async def get_endpoint_status():
 async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
     try:
         with engine.connect() as conn:
-            group_list = groups.split(',') if groups else []
             base_query = """
                 SELECT v.product_name, COUNT(v.id) as total_vulnerabilities, COUNT(DISTINCT v.asset) as affected_endpoints,
                        COUNT(CASE WHEN v.sensitivity_level_name = 'Critical' THEN 1 END) as critical,
@@ -133,7 +132,8 @@ async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
             if remediated:
                 base_query += " JOIN endpoint_event_tasks t ON v.patch_id = t.path_or_product AND v.asset = t.asset"
                 where_clauses.append("t.task_type = 'Patch Install' AND t.action_status = 'Succeeded'")
-            if group_list:
+            if groups:
+                group_list = groups.split(',')
                 where_clauses.append("v.group_name = ANY(:groups)")
                 params["groups"] = group_list
             if where_clauses:
@@ -147,6 +147,80 @@ async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
         logger.error(f"Error getting top apps: {e}")
         raise HTTPException(status_code=500, detail="Error obteniendo top de aplicaciones")
 
+@app.get("/dashboard/remediation-comparison")
+async def get_remediation_comparison():
+    logger.info("Mock endpoint for remediation-comparison called. Returning empty data.")
+    return []
+
+@app.get("/dashboard/vulnerabilities")
+async def get_vulnerabilities_data(limit: int = 100, offset: int = 0, severity: Optional[str] = None, asset: Optional[str] = None):
+    try:
+        with engine.connect() as conn:
+            query = "SELECT * FROM vulnerabilities WHERE 1=1"
+            params = {}
+            if severity:
+                query += " AND sensitivity_level_name = :severity"
+                params["severity"] = severity
+            if asset:
+                query += " AND asset ILIKE :asset"
+                params["asset"] = f"%{asset}%"
+            total_query = query.replace("SELECT *", "SELECT COUNT(*)")
+            total = conn.execute(text(total_query), params).scalar_one()
+            query += " ORDER BY v3_base_score DESC, created_at DESC LIMIT :limit OFFSET :offset"
+            params["limit"] = limit
+            params["offset"] = offset
+            result = conn.execute(text(query), params).fetchall()
+            return {"data": [dict(row._mapping) for row in result], "total": total}
+    except Exception as e:
+        logger.error(f"Error getting vulnerabilities data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo vulnerabilidades: {str(e)}")
+
+@app.get("/dashboard/endpoints")
+async def get_endpoints_data(limit: int = 100, offset: int = 0, os_filter: Optional[str] = None, hostname_filter: Optional[str] = None):
+    try:
+        with engine.connect() as conn:
+            query = "SELECT * FROM endpoints WHERE 1=1"
+            params = {}
+            if os_filter:
+                query += " AND operating_system ILIKE :os_filter"
+                params["os_filter"] = f"%{os_filter}%"
+            if hostname_filter:
+                query += " AND hostname ILIKE :hostname_filter"
+                params["hostname_filter"] = f"%{hostname_filter}%"
+            total_query = query.replace("SELECT *", "SELECT COUNT(*)")
+            total = conn.execute(text(total_query), params).scalar_one()
+            query += " ORDER BY endpoint_updated_at DESC LIMIT :limit OFFSET :offset"
+            params["limit"] = limit
+            params["offset"] = offset
+            result = conn.execute(text(query), params).fetchall()
+            return {"data": [dict(row._mapping) for row in result], "total": total}
+    except Exception as e:
+        logger.error(f"Error getting endpoints data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo endpoints: {str(e)}")
+
+@app.get("/dashboard/tasks")
+async def get_tasks_data(limit: int = 100, offset: int = 0, status_filter: Optional[str] = None, asset_filter: Optional[str] = None):
+    try:
+        with engine.connect() as conn:
+            query = "SELECT * FROM endpoint_event_tasks WHERE 1=1"
+            params = {}
+            if status_filter:
+                query += " AND action_status = :status_filter"
+                params["status_filter"] = status_filter
+            if asset_filter:
+                query += " AND asset ILIKE :asset_filter"
+                params["asset_filter"] = f"%{asset_filter}%"
+            total_query = query.replace("SELECT *", "SELECT COUNT(*)")
+            total = conn.execute(text(total_query), params).scalar_one()
+            query += " ORDER BY create_at DESC LIMIT :limit OFFSET :offset"
+            params["limit"] = limit
+            params["offset"] = offset
+            result = conn.execute(text(query), params).fetchall()
+            return {"data": [dict(row._mapping) for row in result], "total": total}
+    except Exception as e:
+        logger.error(f"Error getting tasks data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo tareas: {str(e)}")
+
 @app.get("/database/list-reports")
 async def list_reports_in_server():
     try:
@@ -154,7 +228,7 @@ async def list_reports_in_server():
             return {"files": []}
         files_details = []
         for filename in os.listdir(REPORTS_DIR):
-            if filename.endswith('.csv'):
+            if filename.endswith(".csv"):
                 file_path = os.path.join(REPORTS_DIR, filename)
                 try:
                     stats = os.stat(file_path)
@@ -165,7 +239,7 @@ async def list_reports_in_server():
                     })
                 except Exception:
                     pass
-        return {"files": sorted(files_details, key=lambda x: x['filename'])}
+        return {"files": sorted(files_details, key=lambda x: x["filename"])}
     except Exception as e:
         logger.error(f"Error listando archivos de reportes: {e}")
         raise HTTPException(status_code=500, detail=f"Error listando archivos: {str(e)}")
@@ -174,7 +248,7 @@ async def list_reports_in_server():
 async def upload_csvs(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...) ):
     saved_files = []
     for file in files:
-        if file.filename.endswith('.csv'):
+        if file.filename.endswith(".csv"):
             dest_path = os.path.join(REPORTS_DIR, file.filename)
             with open(dest_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
