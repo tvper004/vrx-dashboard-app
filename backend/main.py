@@ -191,7 +191,7 @@ async def get_extraction_status():
                 SELECT * FROM extraction_logs 
                 ORDER BY created_at DESC 
                 LIMIT 1
-            """,)).fetchone()
+            """ )).fetchone()
             
             if result:
                 return {
@@ -230,7 +230,7 @@ async def get_dashboard_overview():
                 SELECT sensitivity_level_name, COUNT(*) as count 
                 FROM vulnerabilities 
                 GROUP BY sensitivity_level_name
-            """,)).fetchall()
+            """ )).fetchall()
             stats["vulnerabilities_by_severity"] = {row.sensitivity_level_name: row.count for row in result}
             
             # Endpoints por sistema operativo
@@ -238,7 +238,7 @@ async def get_dashboard_overview():
                 SELECT operating_system, COUNT(*) as count 
                 FROM endpoints 
                 GROUP BY operating_system
-            """,)).fetchall()
+            """ )).fetchall()
             stats["endpoints_by_os"] = {row.operating_system: row.count for row in result}
             
             # Tareas por estado
@@ -246,14 +246,14 @@ async def get_dashboard_overview():
                 SELECT action_status, COUNT(*) as count 
                 FROM endpoint_event_tasks 
                 GROUP BY action_status
-            """,)).fetchall()
+            """ )).fetchall()
             stats["tasks_by_status"] = {row.action_status: row.count for row in result}
             
             # Última actualización
             result = conn.execute(text("""
                 SELECT MAX(updated_at) as last_update 
                 FROM endpoints
-            """,)).fetchone()
+            """ )).fetchone()
             stats["last_update"] = result.last_update.isoformat() if result and result.last_update else None
             
             return stats
@@ -523,6 +523,32 @@ async def clear_database():
         logger.error(f"Error limpiando la base de datos: {e}")
         raise HTTPException(status_code=500, detail=f"Error limpiando la base de datos: {str(e)}")
 
+@app.get("/database/list-reports")
+async def list_reports_in_server():
+    """Lista los archivos CSV encontrados en el directorio de reportes del servidor."""
+    try:
+        if not os.path.exists(REPORTS_DIR):
+            return {"message": "El directorio de reportes no existe.", "files": []}
+
+        files_details = []
+        for filename in os.listdir(REPORTS_DIR):
+            if filename.endswith('.csv'):
+                file_path = os.path.join(REPORTS_DIR, filename)
+                try:
+                    stats = os.stat(file_path)
+                    files_details.append({
+                        "filename": filename,
+                        "size_bytes": stats.st_size,
+                        "modified_at": datetime.fromtimestamp(stats.st_mtime).isoformat()
+                    })
+                except Exception as e:
+                    logger.warning(f"No se pudo obtener detalles del archivo {filename}: {e}")
+        
+        return {"files": files_details}
+    except Exception as e:
+        logger.error(f"Error listando archivos de reportes: {e}")
+        raise HTTPException(status_code=500, detail=f"Error listando archivos: {str(e)}")
+
 @app.post("/database/upload-csvs")
 async def upload_csvs(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...) ):
     """
@@ -625,7 +651,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             conn.execute(text("""
                 INSERT INTO extraction_logs (extraction_type, status, started_at)
                 VALUES (:extraction_type, :status, :started_at)
-            """,), {
+            """ ), {
                 "extraction_type": extraction_type,
                 "status": "running",
                 "started_at": datetime.now()
@@ -686,7 +712,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                         WHERE extraction_type = :extraction_type AND status = 'running'
                         ORDER BY created_at DESC LIMIT 1
                     )
-                """,), {
+                """ ), {
                     "status": "completed",
                     "completed_at": datetime.now(),
                     "extraction_type": extraction_type
@@ -707,7 +733,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                         WHERE extraction_type = :extraction_type AND status = 'running'
                         ORDER BY created_at DESC LIMIT 1
                     )
-                """,), {
+                """ ), {
                     "status": "failed",
                     "error_message": error_message,
                     "completed_at": datetime.now(),
@@ -730,7 +756,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                     SELECT id FROM extraction_logs
                     WHERE status = 'running' ORDER BY created_at DESC LIMIT 1
                 )
-            """,), {"status": "failed", "error_message": error_message, "completed_at": datetime.now()})
+            """ ), {"status": "failed", "error_message": error_message, "completed_at": datetime.now()})
             conn.commit()
 
     except Exception as e:
@@ -747,7 +773,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                     WHERE extraction_type = :extraction_type AND status = 'running'
                     ORDER BY created_at DESC LIMIT 1
                 )
-            """,), {
+            """ ), {
                 "status": "failed",
                 "error_message": str(e),
                 "completed_at": datetime.now(),
@@ -787,8 +813,14 @@ async def process_csv_files():
 async def bulk_load_csv(file_path: str, table_name: str, columns: list, column_mapping: dict = None, timestamp_cols: list = None):
     """Carga datos desde un archivo CSV a una tabla usando el comando COPY de PostgreSQL."""
     try:
-        df = pd.read_csv(file_path, usecols=columns)
-        
+        try:
+            # Intenta leer con UTF-8, manejando el BOM (Byte Order Mark) común en Windows
+            df = pd.read_csv(file_path, usecols=columns, encoding='utf-8-sig', on_bad_lines='warn')
+        except UnicodeDecodeError:
+            logger.warning(f"La decodificación UTF-8 falló para {file_path}. Intentando con 'latin1'.")
+            # Si falla, intenta con latin1, una codificación común para archivos de Windows
+            df = pd.read_csv(file_path, usecols=columns, encoding='latin1', on_bad_lines='warn')
+
         # Convertir columnas de timestamp (Unix ms) a formato de fecha y hora
         if timestamp_cols:
             for col in timestamp_cols:
@@ -822,7 +854,7 @@ async def bulk_load_csv(file_path: str, table_name: str, columns: list, column_m
                 
                 # Ejecutar COPY
                 cursor.copy_expert(
-                    f"COPY {table_name} ({','.join(db_columns)}) FROM STDIN WITH (FORMAT csv, DELIMITER E'\\t', NULL '\\N')",
+                    f"COPY {table_name} ({','.join(db_columns)}) FROM STDIN WITH (FORMAT csv, DELIMITER E'\t', NULL '\N')",
                     output
                 )
             conn.commit()
