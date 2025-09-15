@@ -87,10 +87,12 @@ function App() {
         eventSource.onmessage = (event) => {
           const data = event.data;
           if (data.startsWith('__END__')) {
-            setLogContent(prev => prev + '\n\n✅ Proceso completado exitosamente.\n');
+            setLogContent(prev => prev + '\n\n✅ Proceso completado exitosamente. La página se recargará para mostrar los datos actualizados.\n');
             setIsExtractionFinished(true);
             reconnectionAttempts = 0;
             eventSource.close();
+            // Recargar la página para mostrar los nuevos datos
+            setTimeout(() => window.location.reload(), 2000);
           } else if (data.startsWith('__ERROR__:')) {
             const errorMsg = data.replace('__ERROR__:', '');
             setLogContent(prev => prev + `\n\n❌ ERROR: ${errorMsg}\n`);
@@ -290,6 +292,7 @@ function App() {
         }}
         width={800}
         wrapClassName={isLogModalMinimized ? 'log-modal-minimized' : ''}
+        maskClosable={false}
         footer={
           isLogModalMinimized
             ? [
