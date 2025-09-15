@@ -747,7 +747,10 @@ async def bulk_load_csv(file_path: str, table_name: str, columns: list, column_m
         # Limpiar datos: reemplazar NaN por None (NULL en SQL) y manejar saltos de línea
         df = df.replace({pd.NA: None, pd.NaT: None})
         for col in df.select_dtypes(include=['object']).columns:
-            df[col] = df[col].str.replace('\n', ' ', regex=False).str.replace('\r', ' ', regex=False)
+            # Aplicar reemplazo solo a los valores que son strings para evitar errores de tipo.
+            df[col] = df[col].apply(
+                lambda x: x.replace('\n', ' ').replace('\r', ' ') if isinstance(x, str) else x
+            )
 
         with engine.connect() as conn:
             raw_conn = conn.connection
