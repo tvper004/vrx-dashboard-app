@@ -29,10 +29,10 @@ import shutil
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Directorios ---
+# --- Directorios --- 
 REPORTS_DIR = "/app/vRx-Report/reports"
 
-# Configuración de base de datos
+# Configuração de base de datos
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     logger.error("FATAL: La variable de entorno DATABASE_URL no está configurada. La aplicación no puede iniciar.")
@@ -251,7 +251,7 @@ async def get_dashboard_overview():
             
             # Última actualización
             result = conn.execute(text("""
-                SELECT MAX(updated_at) as last_update 
+                SELECT MAX(endpoint_updated_at) as last_update 
                 FROM endpoints
             """ )).fetchone()
             stats["last_update"] = result.last_update.isoformat() if result and result.last_update else None
@@ -651,7 +651,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
             conn.execute(text("""
                 INSERT INTO extraction_logs (extraction_type, status, started_at)
                 VALUES (:extraction_type, :status, :started_at)
-            """ ), {
+            "" "), {
                 "extraction_type": extraction_type,
                 "status": "running",
                 "started_at": datetime.now()
@@ -712,7 +712,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                         WHERE extraction_type = :extraction_type AND status = 'running'
                         ORDER BY created_at DESC LIMIT 1
                     )
-                """ ), {
+                "" "), {
                     "status": "completed",
                     "completed_at": datetime.now(),
                     "extraction_type": extraction_type
@@ -733,7 +733,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                         WHERE extraction_type = :extraction_type AND status = 'running'
                         ORDER BY created_at DESC LIMIT 1
                     )
-                """ ), {
+                "" "), {
                     "status": "failed",
                     "error_message": error_message,
                     "completed_at": datetime.now(),
@@ -756,7 +756,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                     SELECT id FROM extraction_logs
                     WHERE status = 'running' ORDER BY created_at DESC LIMIT 1
                 )
-            """ ), {"status": "failed", "error_message": error_message, "completed_at": datetime.now()})
+            "" "), {"status": "failed", "error_message": error_message, "completed_at": datetime.now()})
             conn.commit()
 
     except Exception as e:
@@ -773,7 +773,7 @@ async def run_data_extraction(api_key: str, dashboard_url: str, extraction_type:
                     WHERE extraction_type = :extraction_type AND status = 'running'
                     ORDER BY created_at DESC LIMIT 1
                 )
-            """ ), {
+            "" "), {
                 "status": "failed",
                 "error_message": str(e),
                 "completed_at": datetime.now(),
