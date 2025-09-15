@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="vRx Dashboard API",
     description="API para dashboard interactivo con carga manual de CSV.",
-    version="1.1.0-manual",
+    version="1.2.0-manual",
     lifespan=lifespan
 )
 
@@ -66,6 +66,14 @@ async def read_index():
     return FileResponse("static/index.html")
 
 # --- API Endpoints ---
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "mode": "manual_upload"}
+
+@app.get("/extraction-status")
+async def get_extraction_status():
+    return {"status": "manual_mode", "message": "API running in manual upload mode."}
 
 @app.get("/dashboard/overview")
 async def get_dashboard_overview():
@@ -107,6 +115,37 @@ async def get_endpoint_status():
     except Exception as e:
         logger.error(f"Error getting endpoint status: {e}")
         raise HTTPException(status_code=500, detail="Error obteniendo estado de endpoints")
+
+@app.get("/dashboard/top-apps")
+async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
+    try:
+        with engine.connect() as conn:
+            group_list = groups.split(',') if groups else []
+            base_query = """
+                SELECT v.product_name, COUNT(v.id) as total_vulnerabilities, COUNT(DISTINCT v.asset) as affected_endpoints,
+                       COUNT(CASE WHEN v.sensitivity_level_name = 'Critical' THEN 1 END) as critical,
+                       COUNT(CASE WHEN v.sensitivity_level_name = 'High' THEN 1 END) as high,
+                       COUNT(CASE WHEN v.sensitivity_level_name = 'Low' THEN 1 END) as low
+                FROM vulnerabilities v
+            """
+            where_clauses = []
+            params = {}
+            if remediated:
+                base_query += " JOIN endpoint_event_tasks t ON v.patch_id = t.path_or_product AND v.asset = t.asset"
+                where_clauses.append("t.task_type = 'Patch Install' AND t.action_status = 'Succeeded'")
+            if group_list:
+                where_clauses.append("v.group_name = ANY(:groups)")
+                params["groups"] = group_list
+            if where_clauses:
+                base_query += " WHERE " + " AND ".join(where_clauses)
+            base_query += " GROUP BY v.product_name ORDER BY total_vulnerabilities DESC LIMIT 15"
+            result = conn.execute(text(base_query), params).fetchall()
+            chart_data = [{"name": row.product_name, "value": row.total_vulnerabilities} for row in result]
+            table_data = [dict(row._mapping) for row in result]
+            return {"chart_data": chart_data, "table_data": table_data}
+    except Exception as e:
+        logger.error(f"Error getting top apps: {e}")
+        raise HTTPException(status_code=500, detail="Error obteniendo top de aplicaciones")
 
 @app.get("/database/list-reports")
 async def list_reports_in_server():
@@ -191,7 +230,6 @@ async def load_data_robustly(file_path: str, table_name: str, columns: list, col
 
             for record in records:
                 try:
-                    # Limpiar NaNs que puedan quedar
                     clean_record = {k: v for k, v in record.items() if pd.notna(v)}
                     conn.execute(table.insert().values(**clean_record))
                     successful_rows += 1
@@ -203,7 +241,6 @@ async def load_data_robustly(file_path: str, table_name: str, columns: list, col
 
     except Exception as e:
         logger.error(f"FALLO CRÍTICO en la carga para la tabla {table_name} desde {file_path}: {e}")
-        # No re-lanzar la excepción para no detener el procesamiento de otros archivos
 
 async def load_endpoints_csv(file_path: str):
     columns = ['ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt']
