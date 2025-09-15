@@ -11,6 +11,7 @@ import {
   FilePdfOutlined,
   DownOutlined,
   BugOutlined,
+  MinusOutlined,
   UnorderedListOutlined,
   DeleteOutlined
 } from '@ant-design/icons';
@@ -152,6 +153,14 @@ function App() {
     }
   };
 
+  const handleExtractionButtonClick = () => {
+    if (extractionStatus?.status === 'running') {
+      setLogModalVisible(true);
+    } else {
+      setExtractionModalVisible(true);
+    }
+  };
+
   const exportMenuItems = [
     { key: 'general', label: 'Reporte General' },
     { key: 'overview', label: 'Exportar Resumen' },
@@ -171,7 +180,7 @@ function App() {
         <div className="header-actions">
           <Button 
             icon={<SyncOutlined />} 
-            onClick={() => setExtractionModalVisible(true)}
+            onClick={handleExtractionButtonClick}
             loading={extractionStatus?.status === 'running'}
           >
             {extractionStatus?.status === 'running' ? 'Extrayendo...' : 'Extraer Datos'}
@@ -264,6 +273,9 @@ function App() {
         onCancel={() => setLogModalVisible(false)}
         width={800}
         footer={[
+          <Button key="minimize" icon={<MinusOutlined />} onClick={() => setLogModalVisible(false)}>
+            Minimizar
+          </Button>,
           <Button key="close" onClick={() => setLogModalVisible(false)} disabled={!isExtractionFinished}>
             Cerrar
           </Button>
