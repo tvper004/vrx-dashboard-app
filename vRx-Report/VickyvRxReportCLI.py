@@ -538,16 +538,16 @@ def getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalP
     totalPatchs += tmpPatchs
 
     if len(strEndpointPatchs) > 0:
-        writeReport(dictState['reportNameEndpointPatchs'],strEndpointPatchs)        
+        writeReport(dictState['reportNameEndpointPatchs'],strEndpointPatchs)
     
     if tmpPatchs >= siz3:
         fr0m += siz3
         control_rate()
-        getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalPatchs)
-    
+        # Return the result of the recursive call to correctly bubble up the final count
+        return getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalPatchs)
     else:
-        strcountendpointpatchs = endpointName + "," + str(totalPatchs) + "\n"
-        writeReport(dictState['reportCountEndpointPatchs'],strcountendpointpatchs)
+        # Return the final count when recursion ends
+        return totalPatchs
 
 
 def ReportEndpointPatchs():
@@ -576,9 +576,10 @@ def ReportEndpointPatchs():
             endpointSO = df['SO'][ind]  
             control_rate()          
             endpointGroups = SearchGroupsbyEndpoint(endpointName,dfg)
-            # BUG FIX: Reset totalPatchs for each endpoint to count them correctly.
-            totalPatchs = 0
-            getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,totalPatchs)
+            # Initialize totalPatchs and get the final count from the function
+            final_total_patchs = getAllPatchsEndpoint(fr0m,siz3,endpointName,endpointSO,endpointGroups,0)
+            strcountendpointpatchs = endpointName + "," + str(final_total_patchs) + "\n"
+            writeReport(dictState['reportCountEndpointPatchs'],strcountendpointpatchs)
 
 
 def ReportGroupsSearchs():
