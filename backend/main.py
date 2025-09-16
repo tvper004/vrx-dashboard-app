@@ -357,6 +357,45 @@ async def upload_csvs(background_tasks: BackgroundTasks, files: List[UploadFile]
         logger.error(f"Error al iniciar el procesamiento de CSV: {e}")
         raise HTTPException(status_code=500, detail=f"Error al iniciar el procesamiento de archivos: {str(e)}")
 
+@app.post("/api/database/fix-schema")
+async def fix_database_schema():
+    """Endpoint temporal para arreglar el esquema de la base de datos"""
+    try:
+        with engine.connect() as conn:
+            # Verificar y agregar columnas faltantes
+            conn.execute(text("""
+                DO $$ 
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name = 'endpoints' AND column_name = 'status') THEN
+                        ALTER TABLE endpoints ADD COLUMN status VARCHAR(50);
+                        RAISE NOTICE 'Columna status agregada a la tabla endpoints';
+                    END IF;
+                    
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name = 'endpoints' AND column_name = 'sub_status') THEN
+                        ALTER TABLE endpoints ADD COLUMN sub_status VARCHAR(50);
+                        RAISE NOTICE 'Columna sub_status agregada a la tabla endpoints';
+                    END IF;
+                END $$;
+            """))
+            conn.commit()
+            
+            # Verificar que las columnas existen
+            result = conn.execute(text("""
+                SELECT column_name, data_type, is_nullable 
+                FROM information_schema.columns 
+                WHERE table_name = 'endpoints' 
+                ORDER BY ordinal_position
+            """)).fetchall()
+            
+            columns_info = [{"column_name": row[0], "data_type": row[1], "is_nullable": row[2]} for row in result]
+            
+            return {"message": "Esquema de base de datos actualizado exitosamente", "columns": columns_info}
+    except Exception as e:
+        logger.error(f"Error fixing database schema: {e}")
+        raise HTTPException(status_code=500, detail=f"Error actualizando esquema: {str(e)}")
+
 @app.post("/api/database/reload")
 async def reload_database_from_disk(background_tasks: BackgroundTasks):
     """
