@@ -166,6 +166,28 @@
   display: none; /* Oculta el botón 'X' por defecto */
 }
 
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  background-color: #fff;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dashboard-title {
+  font-size: 20px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 @media (max-width: 768px) {
   .overview-stats .ant-col {
     margin-bottom: 16px;
@@ -173,5 +195,17 @@
   
   .chart-card {
     height: 300px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    height: auto;
+    padding: 16px;
+  }
+
+  .header-actions {
+    margin-top: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }

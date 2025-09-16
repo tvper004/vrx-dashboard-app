@@ -58,6 +58,11 @@ function App() {
   const [serverFiles, setServerFiles] = useState([]);
   const [loadingServerFiles, setLoadingServerFiles] = useState(false);
 
+  // State for reload from disk
+  const [reloading, setReloading] = useState(false);
+  const [reloadStatus, setReloadStatus] = useState({ visible: false, message: '', error: false });
+
+
   useEffect(() => {
     checkExtractionStatus();
     const statusInterval = setInterval(checkExtractionStatus, 10000);
@@ -154,6 +159,24 @@ function App() {
       console.error('Error uploading files:', error);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleReloadFromDisk = async () => {
+    setReloading(true);
+    setReloadStatus({ visible: true, message: 'Iniciando recarga de datos desde el disco. Por favor, espere...', error: false });
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/database/reload`);
+      setReloadStatus({ visible: true, message: response.data.message || 'Proceso de recarga iniciado con éxito.', error: false });
+      setTimeout(() => {
+        setReloadStatus({ visible: false, message: '', error: false });
+        message.success('La recarga de datos ha comenzado en segundo plano.');
+      }, 3000);
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || 'Ocurrió un error desconocido al intentar recargar los datos.';
+      setReloadStatus({ visible: true, message: errorMessage, error: true });
+    } finally {
+      setReloading(false);
     }
   };
 
@@ -261,7 +284,7 @@ function App() {
         </div>
         <div className="header-actions">
           <Button icon={<SyncOutlined />} onClick={() => window.location.reload()}>
-            Recargar
+            Recargar Página
           </Button>
           <Button 
             icon={<CloudDownloadOutlined />} 
@@ -279,6 +302,14 @@ function App() {
           </Button>
           <Button 
             icon={<DatabaseOutlined />} 
+            onClick={handleReloadFromDisk}
+            loading={reloading}
+            title="Recargar la base de datos desde los archivos CSV en el servidor."
+          >
+            Recargar desde Disco
+          </Button>
+          <Button 
+            icon={<InboxOutlined />} 
             onClick={handleShowServerFiles} 
             loading={loadingServerFiles}
             title="Ver los archivos CSV actualmente en el servidor."
@@ -437,6 +468,24 @@ function App() {
           {!isExtractionFinished && <Spin style={{ marginLeft: '10px' }} />}
         </div>
       </Modal>
+
+      {/* Modal for Reload from Disk Status */}
+      <Modal
+        title={reloadStatus.error ? "Error en la Recarga" : "Procesando Datos"}
+        open={reloadStatus.visible}
+        onCancel={() => setReloadStatus({ visible: false, message: '', error: false })}
+        footer={[
+          <Button key="ok" type="primary" onClick={() => setReloadStatus({ visible: false, message: '', error: false })}>
+            OK
+          </Button>,
+        ]}
+      >
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          {reloading && <Spin size="large" />}
+          <p style={{ marginTop: '20px' }}>{reloadStatus.message}</p>
+        </div>
+      </Modal>
+
     </Layout>
   );
 }
