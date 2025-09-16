@@ -148,9 +148,31 @@ async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
         raise HTTPException(status_code=500, detail="Error obteniendo top de aplicaciones")
 
 @app.get("/dashboard/remediation-comparison")
-async def get_remediation_comparison():
-    logger.info("Mock endpoint for remediation-comparison called. Returning empty data.")
-    return []
+async def get_remediation_comparison(start_date: str, end_date: str):
+    """
+    Returns the count of resolved vulnerabilities within a specified date range.
+    Resolved vulnerabilities are defined as successful patch installations.
+    """
+    logger.info(f"Solicitud de comparación de remediación para fechas: {start_date} a {end_date}")
+    try:
+        with engine.connect() as conn:
+            # Convert date strings to datetime objects for comparison
+            # Assuming YYYY-MM-DD format from frontend
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+
+            query = text("""
+                SELECT COUNT(DISTINCT asset || '-' || path_or_product) as resolved_vulnerabilities_count
+                FROM endpoint_event_tasks
+                WHERE task_type = 'Patch Install'
+                AND action_status = 'Succeeded'
+                AND create_at BETWEEN :start_dt AND :end_dt
+            """)
+            result = conn.execute(query, {"start_dt": start_dt, "end_dt": end_dt}).scalar_one_or_none()
+            return {"resolved_vulnerabilities": result or 0}
+    except Exception as e:
+        logger.error(f"Error getting remediation comparison data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo datos de comparación de remediación: {str(e)}")
 
 @app.get("/dashboard/vulnerabilities")
 async def get_vulnerabilities_data(limit: int = 100, offset: int = 0, severity: Optional[str] = None, asset: Optional[str] = None):
