@@ -476,13 +476,16 @@ function App() {
         onCancel={() => setReloadStatus({ visible: false, message: '', error: false })}
         footer={[
           <Button key="ok" type="primary" onClick={() => setReloadStatus({ visible: false, message: '', error: false })}>
-            OK
+            Cerrar
           </Button>,
         ]}
+        width={800}
       >
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-          {reloading && <Spin size="large" />}
-          <p style={{ marginTop: '20px' }}>{reloadStatus.message}</p>
+        <div style={{ padding: '20px', maxHeight: '400px', overflowY: 'auto' }}>
+          {reloading && <Spin style={{ marginBottom: '15px' }}/>}
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: '#f5f5f5', border: '1px solid #ddd', padding: '10px', marginTop: '10px' }}>
+            {reloadStatus.message}
+          </pre>
         </div>
       </Modal>
 
