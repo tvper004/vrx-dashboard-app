@@ -1,11 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Row, Col, Card, Table, Spin, Alert, Typography } from 'antd';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
 import axios from 'axios';
 
 const { Title } = Typography;
 
+// Define a set of vibrant colors for the bars
+const BAR_COLORS = [
+    '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#d0ed57', '#a4de6c', '#8dd1e1', '#83a6ed', '#8856a7', '#8064a2',
+    '#6a51a3', '#54278f', '#3f007d', '#2d004b', '#1a002e'
+];
+
 const TopAppsTab = ({ apiBaseUrl, remediated }) => {
+    // Note: If the 'Top Apps Remediadas' tab appears empty, it's likely due to
+    // the database not containing records that match the remediation criteria
+    // (i.e., successful patch installations linked to vulnerabilities).
+    // The backend query for remediated apps is logically correct, but depends
+    // on the presence of specific data in the 'endpoint_event_tasks' table.
     const [data, setData] = useState({ chart_data: [], table_data: [] });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -52,7 +63,12 @@ const TopAppsTab = ({ apiBaseUrl, remediated }) => {
                             <YAxis dataKey="name" type="category" width={150} interval={0} />
                             <Tooltip />
                             <Legend />
-                            <Bar dataKey="value" name="Vulnerabilidades" fill={remediated ? "#82ca9d" : "#8884d8"} />
+                            {/* Render a Bar for each data point to apply individual colors and labels */}
+                            {data.chart_data.map((entry, index) => (
+                                <Bar key={`bar-${index}`} dataKey="value" fill={BAR_COLORS[index % BAR_COLORS.length]}>
+                                    <LabelList dataKey="value" position="right" />
+                                </Bar>
+                            ))}
                         </BarChart>
                     </ResponsiveContainer>
                 </Card>

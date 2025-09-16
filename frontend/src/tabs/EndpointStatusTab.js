@@ -30,11 +30,11 @@ const EndpointStatusTab = ({ apiBaseUrl }) => {
 
     const columns = [
         { title: 'Hostname', dataIndex: 'hostname', key: 'hostname', fixed: 'left', width: 200, sorter: (a, b) => a.hostname.localeCompare(b.hostname) },
-        { title: 'Sistema Operativo', dataIndex: 'operating_system', key: 'operating_system', width: 200, sorter: (a, b) => a.operating_system.localeCompare(b.operating_system) },
-        { title: 'Vulnerabilidades Totales', dataIndex: 'total_vulnerabilities', key: 'total_vulnerabilities', sorter: (a, b) => a.total_vulnerabilities - b.total_vulnerabilities },
-        { title: 'Críticas', dataIndex: 'critical', key: 'critical', sorter: (a, b) => a.critical - b.critical },
-        { title: 'Altas', dataIndex: 'high', key: 'high', sorter: (a, b) => a.high - b.high },
-        { title: 'Bajas', dataIndex: 'low', key: 'low', sorter: (a, b) => a.low - b.low },
+        { title: 'Sistema Operativo', dataIndex: 'operating_system', key: 'operating_system', width: 150, sorter: (a, b) => a.operating_system.localeCompare(b.operating_system) },
+        { title: 'Vulnerabilidades Totales', dataIndex: 'total_vulnerabilities', key: 'total_vulnerabilities', width: 100, sorter: (a, b) => a.total_vulnerabilities - b.total_vulnerabilities },
+        { title: 'Críticas', dataIndex: 'critical', key: 'critical', width: 80, sorter: (a, b) => a.critical - b.critical },
+        { title: 'Altas', dataIndex: 'high', key: 'high', width: 80, sorter: (a, b) => a.high - b.high },
+        { title: 'Bajas', dataIndex: 'low', key: 'low', width: 80, sorter: (a, b) => a.low - b.low },
     ];
 
     if (loading) return <Spin tip="Cargando..." />;
