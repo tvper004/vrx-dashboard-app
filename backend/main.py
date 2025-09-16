@@ -108,6 +108,12 @@ async def get_dashboard_overview():
             """)
             tasks_by_status = conn.execute(tasks_by_status_query).fetchall()
             stats["tasks_by_status"] = {row.status_category: row.count for row in tasks_by_status}
+            logger.info(f"Tasks by status: {stats['tasks_by_status']}")
+            
+            # Debug: Get all unique task statuses
+            debug_query = text("SELECT DISTINCT action_status, COUNT(*) as count FROM endpoint_event_tasks WHERE action_status IS NOT NULL GROUP BY action_status ORDER BY count DESC")
+            debug_result = conn.execute(debug_query).fetchall()
+            logger.info(f"All task statuses: {[(row.action_status, row.count) for row in debug_result]}")
 
             last_update = conn.execute(text("SELECT MAX(endpoint_updated_at) FROM endpoints")).scalar_one_or_none()
             stats["last_update"] = last_update.isoformat() if last_update else None
@@ -172,6 +178,7 @@ async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
             if remediated:
                 base_query += " JOIN endpoint_event_tasks t ON v.patch_id = t.path_or_product AND v.asset = t.asset"
                 where_clauses.append("t.task_type = 'Patch Install' AND LOWER(t.action_status) LIKE '%succeeded%'")
+                logger.info(f"Query for remediated apps: {base_query}")
             if groups:
                 group_list = groups.split(',')
                 where_clauses.append("v.group_name = ANY(:groups)")
@@ -184,6 +191,11 @@ async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
             
             result = conn.execute(text(base_query), params).fetchall()
             
+            # If no remediated apps found, return empty data with a message
+            if remediated and not result:
+                logger.info("No remediated apps found, returning empty data")
+                return {"chart_data": [], "table_data": []}
+            
             chart_data = [{"name": row.product_name, "value": row.total_vulnerabilities} for row in result]
             table_data = [dict(row._mapping) for row in result]
             
@@ -193,7 +205,7 @@ async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
         raise HTTPException(status_code=500, detail="Error obteniendo top de aplicaciones")
 
 @app.get("/dashboard/remediation-comparison")
-async def get_remediation_comparison(start_date: str, end_date: str):
+async def get_remediation_comparison(start_date: Optional[str] = None, end_date: Optional[str] = None):
     """
     Returns the count of resolved vulnerabilities within a specified date range.
     Resolved vulnerabilities are defined as successful patch installations.
@@ -201,17 +213,32 @@ async def get_remediation_comparison(start_date: str, end_date: str):
     logger.info(f"Solicitud de comparación de remediación para fechas: {start_date} a {end_date}")
     try:
         with engine.connect() as conn:
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            if start_date and end_date:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-            query = text("""
-                SELECT COUNT(DISTINCT asset || '-' || path_or_product) as resolved_vulnerabilities_count
-                FROM endpoint_event_tasks
-                WHERE task_type = 'Patch Install'
-                AND LOWER(action_status) LIKE '%succeeded%'
-                AND create_at BETWEEN :start_dt AND :end_dt
-            """)
-            result = conn.execute(query, {"start_dt": start_dt, "end_dt": end_dt}).scalar_one_or_none()
+                query = text("""
+                    SELECT COUNT(DISTINCT asset || '-' || path_or_product) as resolved_vulnerabilities_count
+                    FROM endpoint_event_tasks
+                    WHERE task_type = 'Patch Install'
+                    AND LOWER(action_status) LIKE '%succeeded%'
+                    AND create_at BETWEEN :start_dt AND :end_dt
+                """)
+                logger.info(f"Remediation comparison query: {query}")
+                logger.info(f"Date range: {start_dt} to {end_dt}")
+                result = conn.execute(query, {"start_dt": start_dt, "end_dt": end_dt}).scalar_one_or_none()
+                logger.info(f"Remediation comparison result: {result}")
+            else:
+                # If no date range provided, return total remediated vulnerabilities
+                query = text("""
+                    SELECT COUNT(DISTINCT asset || '-' || path_or_product) as resolved_vulnerabilities_count
+                    FROM endpoint_event_tasks
+                    WHERE task_type = 'Patch Install'
+                    AND LOWER(action_status) LIKE '%succeeded%'
+                """)
+                logger.info(f"Total remediation query: {query}")
+                result = conn.execute(query).scalar_one_or_none()
+                logger.info(f"Total remediation result: {result}")
             
             return {"resolved_vulnerabilities": result or 0}
     except Exception as e:
@@ -272,8 +299,8 @@ async def get_tasks_data(limit: int = 100, offset: int = 0, status_filter: Optio
             query = "SELECT * FROM endpoint_event_tasks WHERE 1=1"
             params = {}
             if status_filter:
-                query += " AND action_status = :status_filter"
-                params["status_filter"] = status_filter
+                query += " AND LOWER(action_status) LIKE :status_filter"
+                params["status_filter"] = f"%{status_filter}%"
             if asset_filter:
                 query += " AND asset ILIKE :asset_filter"
                 params["asset_filter"] = f"%{asset_filter}%"
@@ -391,10 +418,20 @@ async def load_data_robustly(file_path: str, table_name: str, columns: list, col
         if timestamp_cols:
             for col in timestamp_cols:
                 if col in df.columns:
-                    # Usar pd.to_numeric para manejar valores no numéricos antes de la conversión de fecha
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    # Try different timestamp formats
+                    try:
+                        # First try as milliseconds timestamp
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                        df[col] = pd.to_datetime(df[col], unit='ms', errors='coerce')
+                    except:
+                        try:
+                            # Try as seconds timestamp
+                            df[col] = pd.to_numeric(df[col], errors='coerce')
+                            df[col] = pd.to_datetime(df[col], unit='s', errors='coerce')
+                        except:
+                            # Try as regular datetime string
+                            df[col] = pd.to_datetime(df[col], errors='coerce')
                     df.dropna(subset=[col], inplace=True)
-                    df[col] = pd.to_datetime(df[col], unit='ms', errors='coerce')
 
         df.replace({pd.NaT: None}, inplace=True)
 
@@ -424,8 +461,8 @@ async def load_data_robustly(file_path: str, table_name: str, columns: list, col
         # No relanzar la excepción para no detener el procesamiento de otros archivos
 
 async def load_endpoints_csv(file_path: str):
-    columns = ['ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt', 'status', 'sub_status']
-    column_mapping = {'ID': 'endpoint_id', 'HOSTNAME': 'hostname', 'HASH': 'hash', 'SO': 'operating_system', 'VERSION': 'version', 'endpointUpdatedAt': 'endpoint_updated_at', 'status': 'status', 'sub_status': 'sub_status'}
+    columns = ['ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt']
+    column_mapping = {'ID': 'endpoint_id', 'HOSTNAME': 'hostname', 'HASH': 'hash', 'SO': 'operating_system', 'VERSION': 'version', 'endpointUpdatedAt': 'endpoint_updated_at'}
     await load_data_robustly(file_path, 'endpoints', columns, column_mapping, ['endpoint_updated_at'])
 
 async def load_vulnerabilities_csv(file_path: str):
