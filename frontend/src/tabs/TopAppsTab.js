@@ -51,6 +51,7 @@ const TopAppsTab = ({ apiBaseUrl, remediated }) => {
 
     if (loading) return <Spin tip="Cargando..." />;
     if (error) return <Alert message="Error" description={error} type="error" showIcon />;
+    if (remediated && data.chart_data.length === 0) return <Alert message="No hay datos" description="No se encontraron aplicaciones remediadas en el período seleccionado." type="info" showIcon />;
 
     return (
         <Row gutter={[16, 16]}>
@@ -63,12 +64,9 @@ const TopAppsTab = ({ apiBaseUrl, remediated }) => {
                             <YAxis dataKey="name" type="category" width={150} interval={0} />
                             <Tooltip />
                             <Legend />
-                            {/* Render a Bar for each data point to apply individual colors and labels */}
-                            {data.chart_data.map((entry, index) => (
-                                <Bar key={`bar-${index}`} dataKey="value" fill={BAR_COLORS[index % BAR_COLORS.length]}>
-                                    <LabelList dataKey="value" position="right" />
-                                </Bar>
-                            ))}
+                            <Bar dataKey="value" fill="#8884d8">
+                                <LabelList dataKey="value" position="right" />
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </Card>
