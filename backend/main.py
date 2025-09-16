@@ -75,21 +75,43 @@ async def health_check():
 async def get_extraction_status():
     return {"status": "manual_mode", "message": "API running in manual upload mode."}
 
+
 @app.get("/dashboard/overview")
 async def get_dashboard_overview():
     try:
         with engine.connect() as conn:
             stats = {}
-            stats["total_endpoints"] = conn.execute(text("SELECT COUNT(*) FROM endpoints")).scalar_one_or_none() or 0
-            stats["total_vulnerabilities"] = conn.execute(text("SELECT COUNT(*) FROM vulnerabilities")).scalar_one_or_none() or 0
-            vulns_by_severity = conn.execute(text("SELECT sensitivity_level_name, COUNT(*) as count FROM vulnerabilities GROUP BY sensitivity_level_name")).fetchall()
+            stats["total_endpoints"] = conn.execute(text("SELECT COUNT(DISTINCT id) FROM endpoints")).scalar_one_or_none() or 0
+            stats["total_vulnerabilities"] = conn.execute(text("SELECT COUNT(DISTINCT id) FROM vulnerabilities")).scalar_one_or_none() or 0
+            
+            vulns_by_severity_query = text("SELECT sensitivity_level_name, COUNT(*) as count FROM vulnerabilities WHERE sensitivity_level_name IS NOT NULL GROUP BY sensitivity_level_name")
+            vulns_by_severity = conn.execute(vulns_by_severity_query).fetchall()
             stats["vulnerabilities_by_severity"] = {row.sensitivity_level_name: row.count for row in vulns_by_severity}
-            endpoints_by_os = conn.execute(text("SELECT operating_system, COUNT(*) as count FROM endpoints GROUP BY operating_system")).fetchall()
+
+            endpoints_by_os_query = text("SELECT operating_system, COUNT(*) as count FROM endpoints WHERE operating_system IS NOT NULL GROUP BY operating_system")
+            endpoints_by_os = conn.execute(endpoints_by_os_query).fetchall()
             stats["endpoints_by_os"] = {row.operating_system: row.count for row in endpoints_by_os}
-            tasks_by_status = conn.execute(text("SELECT action_status, COUNT(*) as count FROM endpoint_event_tasks GROUP BY action_status")).fetchall()
-            stats["tasks_by_status"] = {row.action_status: row.count for row in tasks_by_status}
+
+            tasks_by_status_query = text("""
+                SELECT 
+                    CASE 
+                        WHEN LOWER(action_status) LIKE '%succeeded%' THEN 'Succeeded'
+                        WHEN LOWER(action_status) LIKE '%failed%' THEN 'Failed'
+                        WHEN LOWER(action_status) LIKE '%running%' THEN 'Running'
+                        WHEN LOWER(action_status) LIKE '%pending%' THEN 'Pending'
+                        ELSE 'Other'
+                    END as status_category,
+                    COUNT(*) as count
+                FROM endpoint_event_tasks
+                WHERE action_status IS NOT NULL
+                GROUP BY status_category
+            """)
+            tasks_by_status = conn.execute(tasks_by_status_query).fetchall()
+            stats["tasks_by_status"] = {row.status_category: row.count for row in tasks_by_status}
+
             last_update = conn.execute(text("SELECT MAX(endpoint_updated_at) FROM endpoints")).scalar_one_or_none()
             stats["last_update"] = last_update.isoformat() if last_update else None
+            
             return stats
     except Exception as e:
         logger.error(f"Error getting dashboard overview: {e}")
@@ -99,17 +121,35 @@ async def get_dashboard_overview():
 async def get_endpoint_status():
     try:
         with engine.connect() as conn:
-            status_result = conn.execute(text("SELECT operating_system, COUNT(*) as count FROM endpoints GROUP BY operating_system")).fetchall()
-            table_result = conn.execute(text("""
-                SELECT e.hostname, e.operating_system, COUNT(v.id) as total_vulnerabilities,
-                       COUNT(CASE WHEN v.sensitivity_level_name = 'Critical' THEN 1 END) as critical,
-                       COUNT(CASE WHEN v.sensitivity_level_name = 'High' THEN 1 END) as high,
-                       COUNT(CASE WHEN v.sensitivity_level_name = 'Low' THEN 1 END) as low
-                FROM endpoints e LEFT JOIN vulnerabilities v ON e.hostname = v.asset
-                GROUP BY e.hostname, e.operating_system ORDER BY e.hostname
-            """)).fetchall()
+            status_result_query = text("""
+                SELECT 
+                    COALESCE(LOWER(operating_system), 'unknown') as os_lower, 
+                    COUNT(*) as count 
+                FROM endpoints 
+                GROUP BY os_lower
+            """)
+            status_result = conn.execute(status_result_query).fetchall()
+
+            # Capitalize the first letter of each OS name for better display
+            status_chart_data = [{"name": row.os_lower.title(), "value": row.count} for row in status_result]
+
+            table_result_query = text("""
+                SELECT 
+                    e.hostname, 
+                    e.operating_system, 
+                    COUNT(v.id) as total_vulnerabilities,
+                    COUNT(CASE WHEN v.sensitivity_level_name = 'Critical' THEN 1 END) as critical,
+                    COUNT(CASE WHEN v.sensitivity_level_name = 'High' THEN 1 END) as high,
+                    COUNT(CASE WHEN v.sensitivity_level_name = 'Low' THEN 1 END) as low
+                FROM endpoints e 
+                LEFT JOIN vulnerabilities v ON e.hostname = v.asset
+                GROUP BY e.hostname, e.operating_system 
+                ORDER BY e.hostname
+            """)
+            table_result = conn.execute(table_result_query).fetchall()
+            
             return {
-                "status_chart": [{"name": row.operating_system or 'N/A', "value": row.count} for row in status_result],
+                "status_chart": status_chart_data,
                 "endpoint_table": [dict(row._mapping) for row in table_result]
             }
     except Exception as e:
@@ -131,17 +171,22 @@ async def get_top_apps(groups: Optional[str] = None, remediated: bool = False):
             params = {}
             if remediated:
                 base_query += " JOIN endpoint_event_tasks t ON v.patch_id = t.path_or_product AND v.asset = t.asset"
-                where_clauses.append("t.task_type = 'Patch Install' AND t.action_status = 'Succeeded'")
+                where_clauses.append("t.task_type = 'Patch Install' AND LOWER(t.action_status) LIKE '%succeeded%'")
             if groups:
                 group_list = groups.split(',')
                 where_clauses.append("v.group_name = ANY(:groups)")
                 params["groups"] = group_list
+            
             if where_clauses:
                 base_query += " WHERE " + " AND ".join(where_clauses)
+            
             base_query += " GROUP BY v.product_name ORDER BY total_vulnerabilities DESC LIMIT 15"
+            
             result = conn.execute(text(base_query), params).fetchall()
+            
             chart_data = [{"name": row.product_name, "value": row.total_vulnerabilities} for row in result]
             table_data = [dict(row._mapping) for row in result]
+            
             return {"chart_data": chart_data, "table_data": table_data}
     except Exception as e:
         logger.error(f"Error getting top apps: {e}")
@@ -156,8 +201,6 @@ async def get_remediation_comparison(start_date: str, end_date: str):
     logger.info(f"Solicitud de comparación de remediación para fechas: {start_date} a {end_date}")
     try:
         with engine.connect() as conn:
-            # Convert date strings to datetime objects for comparison
-            # Assuming YYYY-MM-DD format from frontend
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
             end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
@@ -165,14 +208,16 @@ async def get_remediation_comparison(start_date: str, end_date: str):
                 SELECT COUNT(DISTINCT asset || '-' || path_or_product) as resolved_vulnerabilities_count
                 FROM endpoint_event_tasks
                 WHERE task_type = 'Patch Install'
-                AND action_status = 'Succeeded'
+                AND LOWER(action_status) LIKE '%succeeded%'
                 AND create_at BETWEEN :start_dt AND :end_dt
             """)
             result = conn.execute(query, {"start_dt": start_dt, "end_dt": end_dt}).scalar_one_or_none()
+            
             return {"resolved_vulnerabilities": result or 0}
     except Exception as e:
         logger.error(f"Error getting remediation comparison data: {e}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo datos de comparación de remediación: {str(e)}")
+
 
 @app.get("/dashboard/vulnerabilities")
 async def get_vulnerabilities_data(limit: int = 100, offset: int = 0, severity: Optional[str] = None, asset: Optional[str] = None):
@@ -371,8 +416,8 @@ async def load_data_robustly(file_path: str, table_name: str, columns: list, col
         raise  # Re-raise exception to stop the whole process
 
 async def load_endpoints_csv(file_path: str):
-    columns = ['ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt']
-    column_mapping = {'ID': 'endpoint_id', 'HOSTNAME': 'hostname', 'HASH': 'hash', 'SO': 'operating_system', 'VERSION': 'version', 'endpointUpdatedAt': 'endpoint_updated_at'}
+    columns = ['ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt', 'status', 'sub_status']
+    column_mapping = {'ID': 'endpoint_id', 'HOSTNAME': 'hostname', 'HASH': 'hash', 'SO': 'operating_system', 'VERSION': 'version', 'endpointUpdatedAt': 'endpoint_updated_at', 'status': 'status', 'sub_status': 'sub_status'}
     await load_data_robustly(file_path, 'endpoints', columns, column_mapping, ['endpoint_updated_at'])
 
 async def load_vulnerabilities_csv(file_path: str):
