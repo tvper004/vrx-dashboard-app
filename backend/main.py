@@ -166,7 +166,7 @@ async def get_vulnerabilities_data(limit: int = 100, offset: int = 0, severity: 
                 params["asset"] = f"%{asset}%"
             total_query = query.replace("SELECT *", "SELECT COUNT(*)")
             total = conn.execute(text(total_query), params).scalar_one()
-            query += " ORDER BY v3_base_score DESC, created_at DESC LIMIT :limit OFFSET :offset"
+            query += " ORDER BY v3_base_score DESC, create_at DESC LIMIT :limit OFFSET :offset"
             params["limit"] = limit
             params["offset"] = offset
             result = conn.execute(text(query), params).fetchall()
@@ -336,10 +336,17 @@ async def load_data_robustly(file_path: str, table_name: str, columns: list, col
                     logger.warning(f"Error al insertar fila en '{table_name}'. Saltando fila. Error: {e}. Fila: {record}")
                     failed_rows += 1
             conn.commit()
-        logger.info(f"Carga para '{table_name}' completada. Filas exitosas: {successful_rows}, Filas fallidas: {failed_rows}")
+        if job_id and reload_jobs.get(job_id):
+            reload_jobs[job_id]['log'] += f"  - Carga para '{table_name}' completada. Filas exitosas: {successful_rows}, fallidas: {failed_rows}\n"
+        logger.info(f"{log_prefix}Carga para '{table_name}' completada. Filas exitosas: {successful_rows}, Filas fallidas: {failed_rows}")
 
     except Exception as e:
-        logger.error(f"FALLO CRÍTICO en la carga para la tabla {table_name} desde {file_path}: {e}")
+        error_msg = f"FALLO CRÍTICO en la carga para la tabla {table_name} desde {file_path}: {e}"
+        if job_id and reload_jobs.get(job_id):
+            reload_jobs[job_id]['log'] += f"ERROR: {error_msg}\n"
+            reload_jobs[job_id]['status'] = "failed"
+        logger.error(f"{log_prefix}{error_msg}")
+        raise  # Re-raise exception to stop the whole process
 
 async def load_endpoints_csv(file_path: str):
     columns = ['ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt']
