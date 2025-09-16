@@ -1,23 +1,90 @@
-import React from 'react';
-import { Row, Col, Typography, Card } from 'antd';
-import TopAppsTab from './TopAppsTab';
+import React, { useState } from 'react';
+import { Row, Col, Typography, Card, DatePicker, Button, Space, Alert, Spin } from 'antd';
+import axios from 'axios';
+import moment from 'moment';
 
 const { Title } = Typography;
+const { RangePicker } = DatePicker;
 
-const RemediationComparisonTab = ({ apiBaseUrl }) => {
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+
+const RemediationComparisonTab = () => {
+    const [startDate, setStartDate] = useState(null);
+    const [endDate, setEndDate] = useState(null);
+    const [resolvedVulnerabilities, setResolvedVulnerabilities] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    const handleDateChange = (dates) => {
+        if (dates) {
+            setStartDate(dates[0]);
+            setEndDate(dates[1]);
+        } else {
+            setStartDate(null);
+            setEndDate(null);
+        }
+    };
+
+    const handleCompare = async () => {
+        if (!startDate || !endDate) {
+            setError('Por favor, selecciona un rango de fechas válido.');
+            setResolvedVulnerabilities(null);
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+        setResolvedVulnerabilities(null);
+
+        try {
+            const formattedStartDate = startDate.format('YYYY-MM-DD');
+            const formattedEndDate = endDate.format('YYYY-MM-DD');
+
+            const response = await axios.get(`${API_BASE_URL}/dashboard/remediation-comparison`, {
+                params: {
+                    start_date: formattedStartDate,
+                    end_date: formattedEndDate,
+                },
+            });
+            setResolvedVulnerabilities(response.data.resolved_vulnerabilities);
+        } catch (err) {
+            console.error('Error fetching remediation comparison:', err);
+            setError('No se pudieron cargar los datos de comparación de remediación.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
-        <div>
+        <div style={{ padding: '24px' }}>
             <Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                Comparativo de Remediación
+                Comparativo de Vulnerabilidades Resueltas por Fecha
             </Title>
-            <Row gutter={[24, 24]}>
-                <Col xs={24} lg={12}>
-                    <TopAppsTab apiBaseUrl={apiBaseUrl} remediated={false} />
-                </Col>
-                <Col xs={24} lg={12}>
-                    <TopAppsTab apiBaseUrl={apiBaseUrl} remediated={true} />
-                </Col>
-            </Row>
+            <Card>
+                <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    <Space>
+                        <RangePicker onChange={handleDateChange} />
+                        <Button
+                            type="primary"
+                            onClick={handleCompare}
+                            loading={loading}
+                            disabled={!startDate || !endDate}
+                        >
+                            Comparar
+                        </Button>
+                    </Space>
+                    {error && <Alert message="Error" description={error} type="error" showIcon />}
+                    {loading && <Spin tip="Cargando datos..." style={{ marginTop: '20px' }} />}
+                    {resolvedVulnerabilities !== null && !loading && !error && (
+                        <Alert
+                            message="Vulnerabilidades Resueltas"
+                            description={`Se resolvieron ${resolvedVulnerabilities} vulnerabilidades en el rango de fechas seleccionado.`}
+                            type="info"
+                            showIcon
+                        />
+                    )}
+                </Space>
+            </Card>
         </div>
     );
 };
