@@ -255,8 +255,33 @@ async def upload_csvs(background_tasks: BackgroundTasks, files: List[UploadFile]
             saved_files.append(file.filename)
     if not saved_files:
         raise HTTPException(status_code=400, detail="No se subieron archivos CSV válidos.")
-    background_tasks.add_task(process_csv_files)
-    return {"message": f"Archivos CSV subidos exitosamente: {', '.join(saved_files)}. El procesamiento ha comenzado."}
+    
+    try:
+        background_tasks.add_task(process_csv_files)
+        return {"message": f"Archivos CSV subidos exitosamente: {', '.join(saved_files)}. El procesamiento ha comenzado."}
+    except Exception as e:
+        logger.error(f"Error al iniciar el procesamiento de CSV: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al iniciar el procesamiento de archivos: {str(e)}")
+
+@app.post("/api/database/reload")
+async def reload_database_from_disk(background_tasks: BackgroundTasks):
+    """
+    Re-triggers the processing of CSV files already present on the server disk.
+    """
+    logger.info("Solicitud para recargar la base de datos desde el disco recibida.")
+    try:
+        # Check if the directory and at least one target file exist before starting
+        if not os.path.exists(REPORTS_DIR) or not any(f in os.listdir(REPORTS_DIR) for f in ["Endpoints.csv", "VulnerabilitiesND.csv"]):
+             raise HTTPException(status_code=404, detail=f"El directorio de reportes ({REPORTS_DIR}) o los archivos CSV principales no se encontraron en el servidor.")
+        
+        background_tasks.add_task(process_csv_files)
+        return {"message": "El proceso de recarga de la base de datos ha comenzado en segundo plano."}
+    except Exception as e:
+        logger.error(f"No se pudo iniciar la recarga de la base de datos: {e}")
+        # If it's an HTTPException from our check, re-raise it
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"No se pudo iniciar el proceso de recarga: {str(e)}")
 
 # --- Data Processing Logic ---
 
