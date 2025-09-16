@@ -12,8 +12,22 @@ const RemediationComparisonTab = () => {
     const [startDate, setStartDate] = useState(null);
     const [endDate, setEndDate] = useState(null);
     const [resolvedVulnerabilities, setResolvedVulnerabilities] = useState(null);
+    const [totalResolved, setTotalResolved] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    // Load total resolved vulnerabilities on component mount
+    useEffect(() => {
+        const loadTotalResolved = async () => {
+            try {
+                const response = await axios.get(`${API_BASE_URL}/dashboard/remediation-comparison`);
+                setTotalResolved(response.data.resolved_vulnerabilities);
+            } catch (err) {
+                console.error('Error loading total resolved vulnerabilities:', err);
+            }
+        };
+        loadTotalResolved();
+    }, []);
 
     const handleDateChange = (dates) => {
         if (dates) {
@@ -75,9 +89,17 @@ const RemediationComparisonTab = () => {
                     </Space>
                     {error && <Alert message="Error" description={error} type="error" showIcon />}
                     {loading && <Spin tip="Cargando datos..." style={{ marginTop: '20px' }} />}
+                    {totalResolved !== null && (
+                        <Alert
+                            message="Total de Vulnerabilidades Resueltas"
+                            description={`Total de vulnerabilidades resueltas: ${totalResolved}`}
+                            type="success"
+                            showIcon
+                        />
+                    )}
                     {resolvedVulnerabilities !== null && !loading && !error && (
                         <Alert
-                            message="Vulnerabilidades Resueltas"
+                            message="Vulnerabilidades Resueltas en el Período"
                             description={`Se resolvieron ${resolvedVulnerabilities} vulnerabilidades en el rango de fechas seleccionado.`}
                             type="info"
                             showIcon
