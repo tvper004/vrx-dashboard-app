@@ -371,17 +371,29 @@ async def process_csv_files():
 async def load_data_robustly(file_path: str, table_name: str, columns: list, column_mapping: dict, timestamp_cols: Optional[list] = None):
     logger.info(f"Iniciando carga robusta para la tabla '{table_name}' desde '{file_path}'")
     try:
+        # Leer el CSV sin 'usecols' primero para evitar errores si faltan columnas
         try:
-            df = pd.read_csv(file_path, usecols=columns, encoding='utf-8-sig', on_bad_lines='warn')
+            df_full = pd.read_csv(file_path, encoding='utf-8-sig', on_bad_lines='warn')
         except UnicodeDecodeError:
             logger.warning(f"Decodificación UTF-8 falló para {file_path}. Intentando con 'latin1'.")
-            df = pd.read_csv(file_path, usecols=columns, encoding='latin1', on_bad_lines='warn')
+            df_full = pd.read_csv(file_path, encoding='latin1', on_bad_lines='warn')
+
+        # Filtrar solo las columnas que existen en el DataFrame
+        existing_columns = [col for col in columns if col in df_full.columns]
+        missing_columns = [col for col in columns if col not in df_full.columns]
+        if missing_columns:
+            logger.warning(f"Columnas no encontradas en {file_path} y serán ignoradas: {missing_columns}")
+        
+        df = df_full[existing_columns].copy()
 
         df.rename(columns=column_mapping, inplace=True)
         
         if timestamp_cols:
             for col in timestamp_cols:
                 if col in df.columns:
+                    # Usar pd.to_numeric para manejar valores no numéricos antes de la conversión de fecha
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    df.dropna(subset=[col], inplace=True)
                     df[col] = pd.to_datetime(df[col], unit='ms', errors='coerce')
 
         df.replace({pd.NaT: None}, inplace=True)
@@ -403,17 +415,13 @@ async def load_data_robustly(file_path: str, table_name: str, columns: list, col
                     logger.warning(f"Error al insertar fila en '{table_name}'. Saltando fila. Error: {e}. Fila: {record}")
                     failed_rows += 1
             conn.commit()
-        if job_id and reload_jobs.get(job_id):
-            reload_jobs[job_id]['log'] += f"  - Carga para '{table_name}' completada. Filas exitosas: {successful_rows}, fallidas: {failed_rows}\n"
-        logger.info(f"{log_prefix}Carga para '{table_name}' completada. Filas exitosas: {successful_rows}, Filas fallidas: {failed_rows}")
+
+        logger.info(f"Carga para '{table_name}' completada. Filas exitosas: {successful_rows}, Filas fallidas: {failed_rows}")
 
     except Exception as e:
         error_msg = f"FALLO CRÍTICO en la carga para la tabla {table_name} desde {file_path}: {e}"
-        if job_id and reload_jobs.get(job_id):
-            reload_jobs[job_id]['log'] += f"ERROR: {error_msg}\n"
-            reload_jobs[job_id]['status'] = "failed"
-        logger.error(f"{log_prefix}{error_msg}")
-        raise  # Re-raise exception to stop the whole process
+        logger.error(error_msg)
+        # No relanzar la excepción para no detener el procesamiento de otros archivos
 
 async def load_endpoints_csv(file_path: str):
     columns = ['ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt', 'status', 'sub_status']
