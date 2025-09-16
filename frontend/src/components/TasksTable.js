@@ -74,19 +74,19 @@ const TasksTable = () => {
       width: 120,
       render: (status) => {
         let color = 'default';
-        if (status === 'Succeeded') color = 'green';
-        else if (status === 'Failed') color = 'red';
-        else if (status === 'Cancelled') color = 'orange';
-        else if (status === 'Running') color = 'blue';
+        if (status && status.toLowerCase().includes('succeeded')) color = 'green';
+        else if (status && status.toLowerCase().includes('failed')) color = 'red';
+        else if (status && status.toLowerCase().includes('cancelled')) color = 'orange';
+        else if (status && status.toLowerCase().includes('running')) color = 'blue';
         return <Tag color={color}>{status}</Tag>;
       },
       filters: [
-        { text: 'Succeeded', value: 'Succeeded' },
-        { text: 'Failed', value: 'Failed' },
-        { text: 'Cancelled', value: 'Cancelled' },
-        { text: 'Running', value: 'Running' },
+        { text: 'Succeeded', value: 'succeeded' },
+        { text: 'Failed', value: 'failed' },
+        { text: 'Cancelled', value: 'cancelled' },
+        { text: 'Running', value: 'running' },
       ],
-      onFilter: (value, record) => record.action_status === value,
+      onFilter: (value, record) => record.action_status && record.action_status.toLowerCase().includes(value),
     },
     {
       title: 'Mensaje de Estado',
@@ -124,7 +124,7 @@ const TasksTable = () => {
 
       const response = await axios.get(`${API_BASE_URL}/dashboard/tasks`, { params });
       
-      setData(response.data.tasks);
+      setData(response.data.data);
       setPagination(prev => ({
         ...prev,
         current: page,
@@ -169,10 +169,10 @@ const TasksTable = () => {
             allowClear
             onChange={(value) => handleFilterChange('status_filter', value)}
           >
-            <Option value="Succeeded">Succeeded</Option>
-            <Option value="Failed">Failed</Option>
-            <Option value="Cancelled">Cancelled</Option>
-            <Option value="Running">Running</Option>
+            <Option value="succeeded">Succeeded</Option>
+            <Option value="failed">Failed</Option>
+            <Option value="cancelled">Cancelled</Option>
+            <Option value="running">Running</Option>
           </Select>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
             Actualizar
@@ -201,3 +201,5 @@ const TasksTable = () => {
 };
 
 export default TasksTable;
+
+

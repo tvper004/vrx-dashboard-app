@@ -66,22 +66,22 @@ const VulnerabilitiesTable = () => {
     },
     {
       title: 'Severidad',
-      dataIndex: 'severity',
-      key: 'severity',
+      dataIndex: 'sensitivity_level_name',
+      key: 'sensitivity_level_name',
       width: 120,
       render: (severity) => {
         let color = 'default';
-        if (severity === 'High') color = 'red';
-        else if (severity === 'Medium') color = 'orange';
+        if (severity === 'Critical') color = 'red';
+        else if (severity === 'High') color = 'orange';
         else if (severity === 'Low') color = 'green';
         return <Tag color={color}>{severity}</Tag>;
       },
       filters: [
+        { text: 'Critical', value: 'Critical' },
         { text: 'High', value: 'High' },
-        { text: 'Medium', value: 'Medium' },
         { text: 'Low', value: 'Low' },
       ],
-      onFilter: (value, record) => record.severity === value,
+      onFilter: (value, record) => record.sensitivity_level_name === value,
     },
     {
       title: 'Producto',
@@ -125,7 +125,7 @@ const VulnerabilitiesTable = () => {
 
       const response = await axios.get(`${API_BASE_URL}/dashboard/vulnerabilities`, { params });
       
-      setData(response.data.vulnerabilities);
+      setData(response.data.data);
       setPagination(prev => ({
         ...prev,
         current: page,
@@ -170,8 +170,8 @@ const VulnerabilitiesTable = () => {
             allowClear
             onChange={(value) => handleFilterChange('severity', value)}
           >
+            <Option value="Critical">Critical</Option>
             <Option value="High">High</Option>
-            <Option value="Medium">Medium</Option>
             <Option value="Low">Low</Option>
           </Select>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
@@ -201,3 +201,5 @@ const VulnerabilitiesTable = () => {
 };
 
 export default VulnerabilitiesTable;
+
+
