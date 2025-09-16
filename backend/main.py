@@ -379,6 +379,43 @@ async def reload_database_from_disk(background_tasks: BackgroundTasks):
 
 # --- Data Processing Logic ---
 
+async def update_extraction_log(extraction_type: str, status: str, error_message: str = None, records_processed: int = 0):
+    """Actualizar el log de extracción sin usar ORDER BY en UPDATE"""
+    try:
+        with engine.connect() as conn:
+            # Primero obtener el ID del log más reciente
+            get_latest_log_query = text("""
+                SELECT id FROM extraction_logs 
+                WHERE extraction_type = :extraction_type AND status = 'running'
+                ORDER BY created_at DESC LIMIT 1
+            """)
+            result = conn.execute(get_latest_log_query, {"extraction_type": extraction_type}).fetchone()
+            
+            if result:
+                log_id = result[0]
+                # Actualizar el log específico
+                update_query = text("""
+                    UPDATE extraction_logs 
+                    SET status = :status, 
+                        error_message = :error_message,
+                        records_processed = :records_processed,
+                        completed_at = :completed_at
+                    WHERE id = :log_id
+                """)
+                conn.execute(update_query, {
+                    "status": status,
+                    "error_message": error_message,
+                    "records_processed": records_processed,
+                    "completed_at": datetime.now(),
+                    "log_id": log_id
+                })
+                conn.commit()
+                logger.info(f"Updated extraction log {log_id} with status: {status}")
+            else:
+                logger.warning(f"No running extraction log found for type: {extraction_type}")
+    except Exception as e:
+        logger.error(f"Error updating extraction log: {e}")
+
 async def process_csv_files():
     logger.info("Iniciando el proceso de carga de datos de archivos CSV...")
     file_processors = {
@@ -454,15 +491,30 @@ async def load_data_robustly(file_path: str, table_name: str, columns: list, col
             conn.commit()
 
         logger.info(f"Carga para '{table_name}' completada. Filas exitosas: {successful_rows}, Filas fallidas: {failed_rows}")
+        
+        # Actualizar log de extracción
+        await update_extraction_log('all', 'completed', None, successful_rows)
 
     except Exception as e:
         error_msg = f"FALLO CRÍTICO en la carga para la tabla {table_name} desde {file_path}: {e}"
         logger.error(error_msg)
+        # Actualizar log de extracción con error
+        await update_extraction_log('all', 'failed', str(e), 0)
         # No relanzar la excepción para no detener el procesamiento de otros archivos
 
 async def load_endpoints_csv(file_path: str):
-    columns = ['ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt']
-    column_mapping = {'ID': 'endpoint_id', 'HOSTNAME': 'hostname', 'HASH': 'hash', 'SO': 'operating_system', 'VERSION': 'version', 'endpointUpdatedAt': 'endpoint_updated_at'}
+    # Try both column name formats and handle missing columns gracefully
+    columns = ['ID', 'HOSTNAME', 'HASH', 'SO', 'VERSION', 'endpointUpdatedAt', 'status', 'sub_status']
+    column_mapping = {
+        'ID': 'endpoint_id', 
+        'HOSTNAME': 'hostname', 
+        'HASH': 'hash', 
+        'SO': 'operating_system', 
+        'VERSION': 'version', 
+        'endpointUpdatedAt': 'endpoint_updated_at',
+        'status': 'status',
+        'sub_status': 'sub_status'
+    }
     await load_data_robustly(file_path, 'endpoints', columns, column_mapping, ['endpoint_updated_at'])
 
 async def load_vulnerabilities_csv(file_path: str):
